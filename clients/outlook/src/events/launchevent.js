@@ -81,7 +81,10 @@ async function handleMessageSend(event) {
     if (outcome.status === "timeout") {
       console.warn(`[esf] proof generation timed out after ${outcome.hashes} hashes`);
       if (settings.onSendFailure === "block") {
-        deny(event, "ESF could not generate a proof in time. Lower the protection level or try again.");
+        // The Smart Alerts dialog is the "ask last" step: with SendMode PromptUser the user gets Send Anyway /
+        // Don't Send, and pressing Send again retries with a fresh budget.
+        deny(event, "ESF needs more time to finish protecting this email. Press Send again to keep trying, " +
+          "or Send Anyway to send it without ESF.");
       } else {
         await notify(item, NOTICE_KEY, "Sent without ESF: the proof took too long to generate.");
         allow(event);

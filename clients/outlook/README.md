@@ -54,8 +54,8 @@ Platform constraints this implementation is built around:
 - **Persistent internet headers need Mailbox 1.8**; on read, ESF stamps are located in the full MIME header block
   returned by `getAllInternetHeadersAsync` (folded lines are unfolded, both `ESF-Stamp` and `X-ESF-Stamp` accepted).
 - **`OnMessageSend` needs Mailbox 1.12+** and does not run on Outlook mobile. Event-based add-ins have a runtime
-  limit of ~5 minutes and show a "taking long" dialog after ~5 seconds — the per-recipient compute budget
-  (default 1 s) keeps ESF far below both.
+  limit of ~5 minutes and show a "taking long" dialog after ~5 seconds — the per-recipient bound (default 15 s) and
+  an overall cap of 240 s keep ESF safely below the hard limit.
 - **Classic Outlook on Windows runs event handlers in a JavaScript-only runtime**: no DOM, no `Office.onReady`, no
   module imports, exactly one script file. `dist/launchevent.js` is therefore a self-contained IIFE bundle, and the
   shared core's SHA-256 falls back to the bundled pure-JS implementation when `crypto.subtle` is absent. If
@@ -86,9 +86,12 @@ User presses Send
     → event.completed({ allowEvent: true })
 ```
 
-No popup on success. On timeout/failure the configured policy applies: **send without ESF** (default, with an
-informational notice on the item) or **hold the message** (Smart Alerts dialog with *Send Anyway* / *Don't Send*).
-All computation is local; no content, recipient, header or telemetry ever leaves the machine.
+No popup on success. With ESF enabled a message is meant to carry a stamp, so the search does not give up early: it
+keeps working up to the per-recipient bound (default 15 s). Only then does the configured policy apply — **ask**
+(default: the Smart Alerts dialog offers *Send Anyway* / *Don't Send*, and pressing Send again retries with a fresh
+budget; this is the Outlook equivalent of Thunderbird's "quiet second, keep going, ask last") or **send without ESF**
+(informational notice on the item). All computation is local; no content, recipient, header or telemetry ever leaves
+the machine.
 
 - **Recipient binding**: `rid = SHA256("to:" || mailbox || 0x00 || salt)` — a stamp for one recipient is useless for
   another, and **no recipient address appears in the header**.
@@ -110,6 +113,10 @@ getAllInternetHeadersAsync → unfold MIME headers → collect ESF-Stamp / X-ESF
 ```
 
 Verification cost is one SHA-256 regardless of declared difficulty; all anti-DoS bounds come from the shared core.
+Stamp freshness is bound to the message, not to the clock on the wall: a stamp must be minted within a configurable
+window (default 24 h) before the message came into being — referenced by the topmost `Received` field, which the
+receiving infrastructure writes, with the sender-controlled `Date` header only as fallback. Stamps never expire by
+default (an optional absolute window exists, off by default), and replay retention is its own bounded value.
 Local mailboxes for the rid check are the signed-in address plus any aliases configured under *Advanced* (Office.js
 cannot enumerate aliases). The conservative default policy only ever *displays* — nothing is deleted or moved.
 

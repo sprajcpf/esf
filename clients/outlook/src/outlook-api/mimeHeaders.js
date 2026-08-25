@@ -40,16 +40,40 @@ export function unfoldHeaderBlock(block) {
 }
 
 /**
+ * Parses the timestamp out of a Received field: the date follows the final semicolon (RFC 5322 section 3.6.7).
+ * Same client-side glue as the Thunderbird verificationService, kept in sync by test.
+ *
+ * @param {string} received
+ * @returns {number|undefined} milliseconds, or undefined when there is nothing usable
+ */
+export function parseReceivedTime(received) {
+  if (typeof received !== "string") {
+    return undefined;
+  }
+  const semicolon = received.lastIndexOf(";");
+  if (semicolon === -1) {
+    return undefined;
+  }
+  const parsed = Date.parse(received.slice(semicolon + 1).trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+/**
  * Extracts what the verifier needs from a raw header block: every ESF-Stamp / X-ESF-Stamp field value, the carrier
- * Message-ID and the From field as fallbacks for clients that expose neither through the item API.
+ * Message-ID and From as fallbacks for clients that expose neither through the item API, plus the reference instant
+ * for stamp freshness - the *topmost* Received field (written by the receiving infrastructure, not the sender's to
+ * choose) with the sender-controlled Date header only as fallback.
  *
  * @param {string} block output of getAllInternetHeadersAsync()
- * @returns {{stampValues: string[], messageId: string, from: string}}
+ * @returns {{stampValues: string[], messageId: string, from: string, receivedAt: number|undefined,
+ *            dateMs: number|undefined}}
  */
 export function extractEsfHeaders(block) {
   const stampValues = [];
   let messageId = "";
   let from = "";
+  let receivedAt;
+  let dateMs;
   for (const line of unfoldHeaderBlock(block)) {
     const colon = line.indexOf(":");
     if (colon < 1) {
@@ -63,7 +87,12 @@ export function extractEsfHeaders(block) {
       messageId = value;
     } else if (name === "from" && !from) {
       from = value;
+    } else if (name === "received" && receivedAt === undefined) {
+      receivedAt = parseReceivedTime(value);
+    } else if (name === "date" && dateMs === undefined) {
+      const parsed = Date.parse(value);
+      dateMs = Number.isFinite(parsed) ? parsed : undefined;
     }
   }
-  return { stampValues, messageId, from };
+  return { stampValues, messageId, from, receivedAt, dateMs };
 }

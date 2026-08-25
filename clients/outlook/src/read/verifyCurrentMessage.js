@@ -5,6 +5,7 @@
 
 import {
   MAX_DECLARED_DIFFICULTY,
+  REPLAY_RETENTION_DAYS,
   Reason,
   Signal,
   StampState,
@@ -49,9 +50,33 @@ export function localMailboxes(settings) {
  * @param {object} settings normalized settings
  * @returns {Promise<object>} state/signal/reason plus diagnostics for the details panel
  */
+/**
+ * When the message came into being - the instant the stamp has to be contemporaneous with.
+ *
+ * Preference order matters for security: the topmost Received timestamp is written by the receiving infrastructure
+ * and is not the sender's to choose, so it wins. The sender-controlled Date header is the fallback, then the item's
+ * own creation time where Outlook exposes it. Never later than now, so a future-dated message cannot buy extra room.
+ *
+ * @param {any} item a read-mode mailbox item
+ * @param {number|undefined} receivedAt from the topmost Received field
+ * @param {number|undefined} dateMs from the Date header
+ * @param {number} [now]
+ * @returns {number} milliseconds since the epoch
+ */
+export function messageReference(item, receivedAt, dateMs, now = Date.now()) {
+  if (Number.isFinite(receivedAt)) {
+    return Math.min(receivedAt, now);
+  }
+  if (Number.isFinite(dateMs)) {
+    return Math.min(dateMs, now);
+  }
+  const created = item && item.dateTimeCreated ? new Date(item.dateTimeCreated).getTime() : Number.NaN;
+  return Number.isFinite(created) ? Math.min(created, now) : now;
+}
+
 export async function verifyCurrentMessage(item, settings) {
   const headerBlock = await getAllInternetHeaders(item);
-  const { stampValues, messageId, from } = extractEsfHeaders(headerBlock);
+  const { stampValues, messageId, from, receivedAt, dateMs } = extractEsfHeaders(headerBlock);
   const policy = receiverPolicy(settings);
   const fromMailbox = (item && item.from && item.from.emailAddress) || from;
 
@@ -62,7 +87,14 @@ export async function verifyCurrentMessage(item, settings) {
     // passing it would reject every prototype stamp. Same contract as the Thunderbird verificationService.
     messageId: undefined,
     now: Date.now(),
-    maxAgeMs: settings.maxStampAgeDays * 24 * 60 * 60 * 1000,
+    // The stamp is checked against when the message came into being, not against the moment it is opened:
+    // verifying at display time would turn every archived message stale weeks after it arrived.
+    messageTime: messageReference(item, receivedAt, dateMs),
+    maxStampToMessageMs: settings.maxStampToMessageHours * 60 * 60 * 1000,
+    // 0 days means a stamp never expires, which is the default.
+    maxAgeMs: settings.maxStampAgeDays > 0
+      ? settings.maxStampAgeDays * 24 * 60 * 60 * 1000
+      : Number.POSITIVE_INFINITY,
     maxDifficulty: MAX_DECLARED_DIFFICULTY,
     minDifficulty: policy.minDifficulty("sha256"),
     requireSenderBinding: false
@@ -111,8 +143,8 @@ export function seenElsewhere(key, messageKey, settings, storage = defaultStorag
   }
   if (!existing) {
     ledger[key] = { messageKey, seenAt: Date.now() };
-    // Entries only need to outlive the freshness window (whitepaper 6.8).
-    const horizon = Date.now() - settings.maxStampAgeDays * 24 * 60 * 60 * 1000;
+    // Without an acceptance window the ledger cannot follow it, so retention is its own bounded value.
+    const horizon = Date.now() - REPLAY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
     for (const [entryKey, entry] of Object.entries(ledger)) {
       if ((entry.seenAt || 0) < horizon) {
         delete ledger[entryKey];

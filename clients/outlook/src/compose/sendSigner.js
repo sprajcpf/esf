@@ -106,6 +106,10 @@ export async function mintStamps({ from, to, cc, bcc, settings, now = Date.now()
 
   const stamps = [];
   let hashes = 0;
+  // Per recipient the search runs up to askAfterSeconds - the quiet maxComputeSeconds phase has no visible effect in
+  // an event handler, so the hard bound is the one that matters here. The overall deadline keeps a many-recipient
+  // send safely below the ~5 minute Smart Alerts runtime limit; what happens on timeout is the caller's policy.
+  const overallDeadline = startedAt + Math.min(240_000, targets.length * (settings.askAfterSeconds ?? 15) * 1000);
   for (const mailbox of targets) {
     const { difficulty } = resolveOutgoingDifficulty({ recipient: mailbox, recipientCount: targets.length, settings });
     if (difficulty <= 0) {
@@ -123,7 +127,7 @@ export async function mintStamps({ from, to, cc, bcc, settings, now = Date.now()
       salt,
       profileParams: {}
     };
-    const deadline = Date.now() + settings.maxComputeSeconds * 1000;
+    const deadline = Math.min(Date.now() + (settings.askAfterSeconds ?? 15) * 1000, overallDeadline);
     const result = await searchNonce({
       workBase: buildWorkBase(stamp),
       difficulty,

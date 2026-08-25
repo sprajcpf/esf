@@ -31,7 +31,8 @@ const EXPLANATIONS = {
   [Reason.UNSUPPORTED_ALGORITHM]: "The ESF proof uses a work profile this add-in cannot check yet.",
   [Reason.DIFFICULTY_OUT_OF_RANGE]: "The ESF proof declares an unacceptable difficulty.",
   [Reason.BELOW_POLICY]: "The proof is valid but below the level your settings require.",
-  [Reason.STALE]: "The ESF proof is too old.",
+  [Reason.STALE]: "The ESF proof is older than the absolute limit set in your settings.",
+  [Reason.STAMP_TOO_OLD]: "The ESF proof was made long before this email - it does not belong to it.",
   [Reason.FUTURE_TIMESTAMP]: "The ESF proof is dated in the future.",
   [Reason.WRONG_RECIPIENT]: "The ESF proof was made for a different recipient.",
   [Reason.SENDER_MISMATCH]: "The ESF proof was made for a different sender.",
@@ -124,8 +125,9 @@ function renderSettings(settings, capabilities) {
   }
   el("setEnabled").checked = settings.enabled;
   difficulty.value = String(settings.outgoingDifficulty);
-  el("setBudget").value = String(settings.maxComputeSeconds);
+  el("setBudget").value = String(settings.askAfterSeconds);
   el("setMinIncoming").value = String(settings.minIncomingDifficulty);
+  el("setStampWindow").value = String(settings.maxStampToMessageHours);
   el("setMaxAge").value = String(settings.maxStampAgeDays);
   el("setOnFailure").value = settings.onSendFailure;
   el("setBccMode").value = settings.bccMode;
@@ -143,8 +145,9 @@ function renderSettings(settings, capabilities) {
     const next = await saveSettings({
       enabled: el("setEnabled").checked,
       outgoingDifficulty: Number(difficulty.value),
-      maxComputeSeconds: Number(el("setBudget").value),
+      askAfterSeconds: Number(el("setBudget").value),
       minIncomingDifficulty: Number(el("setMinIncoming").value),
+      maxStampToMessageHours: Number(el("setStampWindow").value),
       maxStampAgeDays: Number(el("setMaxAge").value),
       onSendFailure: el("setOnFailure").value,
       bccMode: el("setBccMode").value,
@@ -154,8 +157,8 @@ function renderSettings(settings, capabilities) {
     setTimeout(() => { el("saveState").textContent = ""; }, 1500);
     return next;
   };
-  for (const id of ["setEnabled", "setDifficulty", "setBudget", "setMinIncoming", "setMaxAge", "setOnFailure",
-    "setBccMode", "setAliases"]) {
+  for (const id of ["setEnabled", "setDifficulty", "setBudget", "setMinIncoming", "setStampWindow", "setMaxAge",
+    "setOnFailure", "setBccMode", "setAliases"]) {
     el(id).addEventListener("change", persist);
   }
 }

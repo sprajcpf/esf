@@ -4,7 +4,12 @@
  * reference implementations behave the same out of the box.
  */
 
-import { DEFAULT_DIFFICULTY, DEFAULT_MAX_AGE_DAYS, SELECTABLE_DIFFICULTY } from "../esf-core.js";
+import {
+  DEFAULT_DIFFICULTY,
+  DEFAULT_MAX_AGE_DAYS,
+  DEFAULT_STAMP_TO_MESSAGE_HOURS,
+  SELECTABLE_DIFFICULTY
+} from "../esf-core.js";
 
 const STORAGE_KEY = "esfSettings";
 
@@ -14,21 +19,33 @@ export const DEFAULTS = Object.freeze({
   /** Baseline outgoing difficulty in leading zero bits; 0 disables generation. */
   outgoingDifficulty: DEFAULT_DIFFICULTY,
   /**
-   * Wall-clock budget per recipient. Deliberately short so sending stays snappy: Outlook shows its own "taking long"
-   * dialog after about five seconds, and the Smart Alerts runtime hard-limits the whole handler to ~5 minutes.
-   * Mirrors the Thunderbird default, and pairs with the shared 18 bit baseline.
+   * Quiet phase per recipient, in seconds - kept for parity with the Thunderbird client, where the search shows
+   * progress once it passes. An Outlook event handler has no progress surface (Outlook shows its own "taking long"
+   * dialog after about five seconds), so here the search simply keeps going until askAfterSeconds.
    */
   maxComputeSeconds: 1,
-  /** Incoming stamps older than this are rejected (whitepaper 6.7 step 5). */
+  /**
+   * Hard per-recipient bound, in seconds. With ESF enabled a message is meant to carry a stamp, so the search does
+   * not give up after the quiet phase - it keeps working up to this bound, well below the ~5 minute Smart Alerts
+   * runtime limit. Mirrors the Thunderbird askAfterSeconds; what happens then is onSendFailure.
+   */
+  askAfterSeconds: 15,
+  /**
+   * How long before its message a stamp may have been minted (whitepaper 6.7 step 5). This is the check that keeps
+   * senders on a schedule: a stamp produced weeks earlier was either stockpiled or lifted off another message.
+   */
+  maxStampToMessageHours: DEFAULT_STAMP_TO_MESSAGE_HOURS,
+  /** Optional absolute window: stamps older than this are rejected outright; 0 means they never expire (default). */
   maxStampAgeDays: DEFAULT_MAX_AGE_DAYS,
   /** Below this difficulty a valid stamp counts as weak/yellow rather than strong/green. */
   minIncomingDifficulty: 18,
   /**
-   * What to do when a proof cannot be produced in time: "send-without" keeps mail flowing (an informational notice
-   * is added), "block" completes the send event with allowEvent=false so the Smart Alerts dialog appears. There is
-   * no "ask" here: an event handler cannot open its own dialogs, the Smart Alerts dialog is the ask.
+   * What to do once askAfterSeconds is exhausted: "block" completes the send event with allowEvent=false, so the
+   * Smart Alerts dialog asks the user (Send Anyway / Don't Send; pressing Send again retries with a fresh budget).
+   * That is the Outlook equivalent of Thunderbird's "ask" default - with ESF enabled, silently sending unstamped is
+   * the wrong default. "send-without" keeps mail flowing with an informational notice instead.
    */
-  onSendFailure: "send-without",
+  onSendFailure: "block",
   /** Bcc handling: "omit" (whitepaper fallback) or "token" (include the salted rid). See composeSigner in TB. */
   bccMode: "omit",
   /**
@@ -51,9 +68,11 @@ export function normalizeSettings(raw) {
       ? outgoingDifficulty
       : DEFAULTS.outgoingDifficulty,
     maxComputeSeconds: clamp(Number(input.maxComputeSeconds), 1, 120, DEFAULTS.maxComputeSeconds),
-    maxStampAgeDays: clamp(Number(input.maxStampAgeDays), 1, 365, DEFAULTS.maxStampAgeDays),
+    askAfterSeconds: clamp(Number(input.askAfterSeconds), 2, 240, DEFAULTS.askAfterSeconds),
+    maxStampToMessageHours: clamp(Number(input.maxStampToMessageHours), 1, 8760, DEFAULTS.maxStampToMessageHours),
+    maxStampAgeDays: clamp(Number(input.maxStampAgeDays), 0, 3650, DEFAULTS.maxStampAgeDays),
     minIncomingDifficulty: clamp(Number(input.minIncomingDifficulty), 1, 30, DEFAULTS.minIncomingDifficulty),
-    onSendFailure: input.onSendFailure === "block" ? "block" : "send-without",
+    onSendFailure: input.onSendFailure === "send-without" ? "send-without" : "block",
     bccMode: input.bccMode === "token" ? "token" : "omit",
     aliasMailboxes: Array.isArray(input.aliasMailboxes)
       ? input.aliasMailboxes.filter(entry => typeof entry === "string").slice(0, 32)

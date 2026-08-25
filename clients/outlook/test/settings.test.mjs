@@ -5,21 +5,32 @@ import { DEFAULTS, normalizeSettings } from "../src/settings/settings.js";
 import { seenElsewhere } from "../src/read/verifyCurrentMessage.js";
 
 test("normalizeSettings falls back to defaults on garbage", () => {
-  const normalized = normalizeSettings({ outgoingDifficulty: 99, maxComputeSeconds: -5, onSendFailure: "explode",
-    bccMode: "shout", aliasMailboxes: "not-an-array" });
+  const normalized = normalizeSettings({ outgoingDifficulty: 99, maxComputeSeconds: -5, askAfterSeconds: "soon",
+    maxStampToMessageHours: -1, onSendFailure: "explode", bccMode: "shout", aliasMailboxes: "not-an-array" });
   assert.equal(normalized.outgoingDifficulty, DEFAULTS.outgoingDifficulty);
   assert.equal(normalized.maxComputeSeconds, 1);
-  assert.equal(normalized.onSendFailure, "send-without");
+  assert.equal(normalized.askAfterSeconds, DEFAULTS.askAfterSeconds);
+  assert.equal(normalized.maxStampToMessageHours, 1);
+  assert.equal(normalized.onSendFailure, "block");
   assert.equal(normalized.bccMode, "omit");
   assert.deepEqual(normalized.aliasMailboxes, []);
 });
 
+test("stamps never expire by default; 0 is preserved, not clamped up", () => {
+  assert.equal(normalizeSettings({}).maxStampAgeDays, 0);
+  assert.equal(normalizeSettings({ maxStampAgeDays: 0 }).maxStampAgeDays, 0);
+  assert.equal(normalizeSettings({ maxStampAgeDays: 30 }).maxStampAgeDays, 30);
+});
+
 test("normalizeSettings keeps valid values", () => {
-  const normalized = normalizeSettings({ enabled: false, outgoingDifficulty: 18, onSendFailure: "block",
-    bccMode: "token", aliasMailboxes: ["alias@example.com", 42] });
+  const normalized = normalizeSettings({ enabled: false, outgoingDifficulty: 18, askAfterSeconds: 30,
+    maxStampToMessageHours: 48, onSendFailure: "send-without", bccMode: "token",
+    aliasMailboxes: ["alias@example.com", 42] });
   assert.equal(normalized.enabled, false);
   assert.equal(normalized.outgoingDifficulty, 18);
-  assert.equal(normalized.onSendFailure, "block");
+  assert.equal(normalized.askAfterSeconds, 30);
+  assert.equal(normalized.maxStampToMessageHours, 48);
+  assert.equal(normalized.onSendFailure, "send-without");
   assert.equal(normalized.bccMode, "token");
   assert.deepEqual(normalized.aliasMailboxes, ["alias@example.com"]);
 });

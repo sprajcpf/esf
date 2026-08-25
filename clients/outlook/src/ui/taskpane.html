@@ -36,22 +36,26 @@
       <button id="advancedToggle" class="linklike">Advanced…</button>
       <div id="advanced" hidden>
         <label class="row">
-          <span>Time budget per recipient (s)</span>
-          <input type="number" id="setBudget" min="1" max="120" />
+          <span>Max. computation per recipient (s)</span>
+          <input type="number" id="setBudget" min="2" max="240" />
         </label>
         <label class="row">
           <span>Minimum incoming difficulty</span>
           <input type="number" id="setMinIncoming" min="1" max="30" />
         </label>
         <label class="row">
-          <span>Maximum stamp age (days)</span>
-          <input type="number" id="setMaxAge" min="1" max="365" />
+          <span>Stamp may predate its email by (hours)</span>
+          <input type="number" id="setStampWindow" min="1" max="8760" />
         </label>
         <label class="row">
-          <span>If no proof can be made</span>
+          <span>Absolute stamp age limit (days, 0 = never)</span>
+          <input type="number" id="setMaxAge" min="0" max="3650" />
+        </label>
+        <label class="row">
+          <span>If the proof needs more time</span>
           <select id="setOnFailure">
+            <option value="block">Ask before sending</option>
             <option value="send-without">Send without ESF</option>
-            <option value="block">Hold the message</option>
           </select>
         </label>
         <label class="row">
