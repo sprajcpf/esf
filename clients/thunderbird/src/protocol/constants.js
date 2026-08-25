@@ -60,13 +60,20 @@ export const MAX_SALT_HEX = 64;
 export const TOKEN_LENGTH = 43; // BASE64URL of a 32 byte digest, unpadded
 
 /**
- * Freshness (whitepaper 6.7 step 5).
+ * Freshness (whitepaper 6.7 step 5), in two independent parts.
  *
- * A stamp does not expire by default: a proof of work stays a proof of work, and a valid result that silently turns
- * red after a week is confusing and makes stored mail unverifiable. A receiver can still opt into a window, which is
- * what the whitepaper's DNS `maxage` tag advertises. See NO_EXPIRY.
+ * 1. The stamp must be *contemporaneous with its message*: it has to be minted within
+ *    DEFAULT_STAMP_TO_MESSAGE_HOURS before the message came into being. This is what keeps the work on a schedule -
+ *    nobody can mint stamps for months on idle hardware and dump them in one campaign, because a stockpiled stamp no
+ *    longer matches the message it arrives with.
+ * 2. An absolute acceptance window is optional and off by default (NO_EXPIRY). A proof of work does not become
+ *    untrue with age, and an absolute window would turn stored mail red long after it was correctly delivered.
+ *
+ * The first check is the one that carries the security property, and unlike an absolute window it never expires a
+ * message that was fine on arrival.
  */
 export const MAX_CLOCK_SKEW_MS = 60 * 60 * 1000;
+export const DEFAULT_STAMP_TO_MESSAGE_HOURS = 24;
 export const NO_EXPIRY = 0;
 export const DEFAULT_MAX_AGE_DAYS = NO_EXPIRY;
 
@@ -125,6 +132,7 @@ export const Reason = {
   DIFFICULTY_OUT_OF_RANGE: "difficulty-out-of-range",
   BELOW_POLICY: "below-policy",
   STALE: "stale",
+  STAMP_TOO_OLD: "stamp-too-old",
   FUTURE_TIMESTAMP: "future-timestamp",
   WRONG_RECIPIENT: "wrong-recipient",
   SENDER_MISMATCH: "sender-mismatch",

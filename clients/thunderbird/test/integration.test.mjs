@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { flattenRecipients } from "../src/background/composeSigner.js";
-import { freshnessReference, parseRawHeaders } from "../src/background/verificationService.js";
+import { messageReference, parseRawHeaders, parseReceivedTime } from "../src/background/verificationService.js";
 import { PeerClass, receiverPolicy, resolveOutgoingDifficulty } from "../src/protocol/policy.js";
 import { DEFAULTS, normalizeSettings, resolveWorkerCount } from "../src/utils/settings.js";
 import { SIGNAL_BY_STATE, Signal, StampState } from "../src/protocol/constants.js";
@@ -110,23 +110,48 @@ test("the ask threshold is clamped into something a human would wait for", () =>
   assert.equal(normalizeSettings({ askAfterSeconds: 30 }).askAfterSeconds, 30);
 });
 
-test("freshness is judged against the message date, so archived mail does not turn stale", () => {
+test("the stamp is checked against when the message arrived, so archived mail keeps its verdict", () => {
   const day = 24 * 60 * 60 * 1000;
   const now = Date.UTC(2026, 7, 25, 12, 0, 0);
   const arrived = now - 30 * day;
-  assert.equal(freshnessReference({ date: new Date(arrived) }, now), arrived);
-  assert.equal(freshnessReference({ date: new Date(arrived).toISOString() }, now), arrived);
+  assert.equal(messageReference({ date: new Date(arrived) }, undefined, now), arrived);
+  assert.equal(messageReference({ date: new Date(arrived).toISOString() }, undefined, now), arrived);
 });
 
-test("a message dated in the future cannot buy itself extra freshness", () => {
+test("the arrival time from Received wins over the sender-controlled Date", () => {
   const now = Date.UTC(2026, 7, 25, 12, 0, 0);
-  assert.equal(freshnessReference({ date: new Date(now + 90 * 24 * 60 * 60 * 1000) }, now), now);
+  const arrived = now - 60 * 60 * 1000;
+  const backdated = now - 400 * 24 * 60 * 60 * 1000;
+  assert.equal(messageReference({ date: new Date(backdated) }, arrived, now), arrived,
+    "a back-dated message cannot pass a stockpiled stamp off as contemporaneous");
+});
+
+test("a message dated in the future cannot buy itself extra room", () => {
+  const now = Date.UTC(2026, 7, 25, 12, 0, 0);
+  assert.equal(messageReference({ date: new Date(now + 90 * 24 * 60 * 60 * 1000) }, undefined, now), now);
+  assert.equal(messageReference({}, now + 5000, now), now);
 });
 
 test("a message without a usable date falls back to now", () => {
   const now = Date.UTC(2026, 7, 25, 12, 0, 0);
-  assert.equal(freshnessReference({}, now), now);
-  assert.equal(freshnessReference({ date: "not a date" }, now), now);
+  assert.equal(messageReference({}, undefined, now), now);
+  assert.equal(messageReference({ date: "not a date" }, undefined, now), now);
+});
+
+test("parseReceivedTime reads the timestamp after the final semicolon", () => {
+  const received = "from mx.example.org (mx.example.org [203.0.113.7]) by mail.example.com with ESMTPS " +
+    "id abc123 for <alice@example.com>; Tue, 25 Aug 2026 14:57:33 +0200";
+  assert.equal(parseReceivedTime(received), Date.parse("Tue, 25 Aug 2026 14:57:33 +0200"));
+  assert.equal(parseReceivedTime("no semicolon here"), undefined);
+  assert.equal(parseReceivedTime("from x; not a date"), undefined);
+  assert.equal(parseReceivedTime(undefined), undefined);
+});
+
+test("the contemporaneity default is 24 hours, and it is configurable", () => {
+  assert.equal(DEFAULTS.maxStampToMessageHours, 24);
+  assert.equal(normalizeSettings({ maxStampToMessageHours: 0 }).maxStampToMessageHours, 1);
+  assert.equal(normalizeSettings({ maxStampToMessageHours: 99999 }).maxStampToMessageHours, 8760);
+  assert.equal(normalizeSettings({ maxStampToMessageHours: 48 }).maxStampToMessageHours, 48);
 });
 
 test("settings are clamped so a corrupt profile cannot break the send path", () => {

@@ -1,6 +1,11 @@
 /** Settings storage. Thin wrapper around browser.storage.local so every consumer sees the same defaults. */
 
-import { DEFAULT_DIFFICULTY, DEFAULT_MAX_AGE_DAYS, SELECTABLE_DIFFICULTY } from "../protocol/constants.js";
+import {
+  DEFAULT_DIFFICULTY,
+  DEFAULT_MAX_AGE_DAYS,
+  DEFAULT_STAMP_TO_MESSAGE_HOURS,
+  SELECTABLE_DIFFICULTY
+} from "../protocol/constants.js";
 
 const STORAGE_KEY = "settings";
 
@@ -20,7 +25,12 @@ export const DEFAULTS = Object.freeze({
    * add-on keeps working silently rather than bothering anyone.
    */
   askAfterSeconds: 15,
-  /** Incoming stamps older than this are rejected; 0 means they never expire (the default). */
+  /**
+   * How long before its message a stamp may have been minted. This is the check that keeps senders on a schedule:
+   * a stamp produced weeks earlier was either stockpiled or lifted off another message.
+   */
+  maxStampToMessageHours: DEFAULT_STAMP_TO_MESSAGE_HOURS,
+  /** Optional absolute window: stamps older than this are rejected outright; 0 means they never expire (default). */
   maxStampAgeDays: DEFAULT_MAX_AGE_DAYS,
   /** Below this difficulty a valid stamp counts as weak/yellow rather than strong/green. */
   minIncomingDifficulty: 18,
@@ -78,6 +88,8 @@ export function normalizeSettings(raw) {
       : DEFAULTS.outgoingDifficulty,
     maxComputeSeconds: clamp(Number(input.maxComputeSeconds), 1, 120, DEFAULTS.maxComputeSeconds),
     askAfterSeconds: clamp(Number(input.askAfterSeconds), 2, 600, DEFAULTS.askAfterSeconds),
+    maxStampToMessageHours: clamp(Number(input.maxStampToMessageHours), 1, 8760,
+      DEFAULTS.maxStampToMessageHours),
     maxStampAgeDays: clamp(Number(input.maxStampAgeDays), 0, 3650, DEFAULTS.maxStampAgeDays),
     minIncomingDifficulty: clamp(Number(input.minIncomingDifficulty), 1, 30, DEFAULTS.minIncomingDifficulty),
     maxWorkers: clamp(Number(input.maxWorkers), 0, 32, DEFAULTS.maxWorkers),

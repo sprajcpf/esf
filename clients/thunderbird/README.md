@@ -74,7 +74,7 @@ The colour is a policy result, not a cryptographic primitive (whitepaper 11):
 | yellow `~` | `weak` | Real work, but below your configured minimum |
 | yellow `~` | `unsupported` | A registered ESF profile this client does not implement (e.g. argon2id) — never executed |
 | red `–` | `missing` | No stamp. Almost no mail carries one today; this is **not** evidence of abuse |
-| red `!` | `invalid` | Malformed, future-dated, wrong recipient, insufficient, replayed — or stale, if you set an expiry |
+| red `!` | `invalid` | Malformed, minted too long before the message, future-dated, wrong recipient, insufficient, replayed — or stale, if you set an absolute expiry |
 
 `missing` and `invalid` share the red light but stay distinct internally, because automation must be able to tell a
 legacy sender from a forged stamp.
@@ -213,8 +213,12 @@ TB 153, so the page form is used deliberately.
   cores for Thunderbird and everything else (whitepaper 13).
 - Cancellation is `worker.terminate()` — CPU work stops in the same tick, not at the next checkpoint.
 - Verification is one hash per stamp, at most 8 header fields and 16 stamps per message, with per-message caching.
-- Freshness is judged against the message's own date, not the moment it is opened, so an archived message keeps the
-  verdict it had on arrival instead of turning red weeks later.
+- Freshness has two parts. The stamp must be **contemporaneous with its message** — minted within 24 h of it by
+  default — which is what stops anyone minting stamps for months on idle hardware and dumping them in one campaign.
+  An absolute expiry is separate, optional and off: a proof of work does not become untrue with age. Both are
+  measured against when the message *arrived* (the topmost `Received` field, which the sender does not control,
+  falling back to `Date`), never against the moment it is opened — so an archived message keeps the verdict it had
+  on arrival instead of turning red weeks later.
 - *Measure my hash rate* in the options turns local throughput into expected durations per difficulty.
 
 Difficulty and the time budget belong together, because work is exponential. Measured inside Thunderbird at roughly

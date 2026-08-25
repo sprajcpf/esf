@@ -34,6 +34,8 @@ const REASON_TEXT = {
   "difficulty-out-of-range": "The declared difficulty is outside the accepted range.",
   "below-policy": "Real work was done, but less than your configured minimum.",
   stale: "The stamp is older than your acceptance window.",
+  "stamp-too-old": "The work was done long before this message — a stamp has to belong to the " +
+    "message it arrives with.",
   "future-timestamp": "The stamp is dated in the future.",
   "wrong-recipient": "The stamp is not bound to any of your addresses.",
   "sender-mismatch": "The stamp was not minted for this sender.",

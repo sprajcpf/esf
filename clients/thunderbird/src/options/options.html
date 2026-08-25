@@ -101,18 +101,29 @@
       <legend>Incoming</legend>
 
       <label>
-        <span>Accept stamps up to</span>
+        <span>Stamp must be minted within</span>
         <span class="inline">
-          <input type="number" name="maxStampAgeDays" min="0" max="3650" step="1"> days old
-          <small>0 = never expires</small>
+          <input type="number" name="maxStampToMessageHours" min="1" max="8760" step="1"> hours of the message
         </span>
       </label>
       <p class="hint indent">
-        Default: stamps do not expire — work stays work, and a result that silently turned red after a week would be
-        confusing on stored mail. A window makes a sender keep spending instead of minting stamps for months on idle
-        hardware and dumping them in one campaign; it is only worth setting if that matters to you. Either way,
-        freshness is measured against the message's own date, so your archive never goes stale, and a stamp reused on
-        a second message is still refused as a replay.
+        This is the check that keeps senders paying as they go: the work has to belong to <em>this</em> message. A
+        stamp produced weeks earlier was either stockpiled on idle hardware or lifted off another message, and is
+        refused. It is measured against when the message arrived — not when you open it — so nothing in your archive
+        ever turns red later.
+      </p>
+
+      <label>
+        <span>Additionally, reject stamps older than</span>
+        <span class="inline">
+          <input type="number" name="maxStampAgeDays" min="0" max="3650" step="1"> days
+          <small>0 = never expires (default)</small>
+        </span>
+      </label>
+      <p class="hint indent">
+        Optional and off by default: a proof of work does not become untrue with age, and an absolute limit would
+        turn correctly delivered old mail red. Set it only if you want stamps to age out regardless of the message
+        they came with.
       </p>
 
       <label>

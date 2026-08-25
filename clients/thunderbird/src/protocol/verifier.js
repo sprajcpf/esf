@@ -8,6 +8,7 @@
  */
 
 import {
+  DEFAULT_STAMP_TO_MESSAGE_HOURS,
   IMPLEMENTED_ALGORITHMS,
   KNOWN_ALGORITHMS,
   MAX_CLOCK_SKEW_MS,
@@ -30,12 +31,29 @@ import { buildWorkBase, hashCandidate, messageIdToken, recipientToken, senderTok
  * @property {string} [from] the message's From mailbox, checked against sid
  * @property {string} [messageId] the message's Message-ID, checked against mid
  * @property {number} [now] current time in ms, injectable for tests
- * @property {number} [maxAgeMs] freshness window
+ * @property {number} [messageTime] when the message came into being (arrival, or its Date); defaults to `now`
+ * @property {number} [maxAgeMs] absolute acceptance window against `now`; Infinity means stamps never expire
+ * @property {number} [maxStampToMessageMs] how long before its message a stamp may have been minted
  * @property {number} [clockSkewMs] tolerance for senders whose clock runs ahead
  * @property {number} [maxDifficulty] highest difficulty we accept as declared
  * @property {number} [minDifficulty] below this a valid stamp counts as weak, not strong
  * @property {boolean} [requireSenderBinding] treat a missing/mismatching sid as invalid rather than ignoring it
  */
+
+/** Human-readable duration for diagnostics: "3 day(s)", "5 hour(s)", "42 second(s)". */
+function formatDuration(ms) {
+  const seconds = Math.round(Math.abs(ms) / 1000);
+  if (seconds >= 86400) {
+    return `${Math.round(seconds / 86400)} day(s)`;
+  }
+  if (seconds >= 3600) {
+    return `${Math.round(seconds / 3600)} hour(s)`;
+  }
+  if (seconds >= 60) {
+    return `${Math.round(seconds / 60)} minute(s)`;
+  }
+  return `${seconds} second(s)`;
+}
 
 /**
  * Verifies a single parsed stamp.
@@ -46,7 +64,9 @@ import { buildWorkBase, hashCandidate, messageIdToken, recipientToken, senderTok
  */
 export async function verifyStamp(stamp, context) {
   const now = context.now ?? Date.now();
-  const maxAgeMs = context.maxAgeMs ?? 7 * 24 * 60 * 60 * 1000;
+  const messageTime = context.messageTime ?? now;
+  const maxAgeMs = context.maxAgeMs ?? Number.POSITIVE_INFINITY;
+  const maxStampToMessageMs = context.maxStampToMessageMs ?? DEFAULT_STAMP_TO_MESSAGE_HOURS * 60 * 60 * 1000;
   const clockSkewMs = context.clockSkewMs ?? MAX_CLOCK_SKEW_MS;
   const maxDifficulty = Math.min(context.maxDifficulty ?? MAX_DECLARED_DIFFICULTY, MAX_DECLARED_DIFFICULTY);
   const minDifficulty = Math.max(context.minDifficulty ?? MIN_DECLARED_DIFFICULTY, MIN_DECLARED_DIFFICULTY);
@@ -83,12 +103,28 @@ export async function verifyStamp(stamp, context) {
   }
 
   const timestampMs = stamp.timestamp * 1000;
-  const age = now - timestampMs;
-  if (age > maxAgeMs) {
-    return outcome(StampState.INVALID, Reason.STALE, { detail: `${Math.round(age / 86400000)} days old`, timestampMs });
+
+  // The work has to belong to *this* message. A stamp minted long before it was either stockpiled in advance or
+  // lifted off another message; either way it is not evidence that sending this one cost anything now.
+  const leadTime = messageTime - timestampMs;
+  if (leadTime > maxStampToMessageMs) {
+    return outcome(StampState.INVALID, Reason.STAMP_TOO_OLD, {
+      detail: `minted ${formatDuration(leadTime)} before the message`,
+      timestampMs,
+      leadTimeMs: leadTime
+    });
   }
-  if (age < -clockSkewMs) {
-    return outcome(StampState.INVALID, Reason.FUTURE_TIMESTAMP, { detail: `${Math.round(-age / 1000)}s ahead` });
+  // A stamp cannot be minted after its own message left, beyond ordinary clock skew.
+  if (leadTime < -clockSkewMs || timestampMs - now > clockSkewMs) {
+    return outcome(StampState.INVALID, Reason.FUTURE_TIMESTAMP, {
+      detail: `${formatDuration(Math.max(-leadTime, timestampMs - now))} ahead`,
+      timestampMs
+    });
+  }
+  // Optional absolute window, off by default: a proof of work does not become untrue with age.
+  const age = now - timestampMs;
+  if (Number.isFinite(maxAgeMs) && age > maxAgeMs) {
+    return outcome(StampState.INVALID, Reason.STALE, { detail: `${formatDuration(age)} old`, timestampMs });
   }
 
   // Recipient binding: recompute rid for each of our own mailboxes. Without this, a stamp minted for somebody else

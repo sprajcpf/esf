@@ -23,6 +23,7 @@ function context(overrides = {}) {
     localMailboxes: [ME],
     from: FROM,
     now: NOW,
+    messageTime: NOW,
     maxAgeMs: 7 * DAY,
     minDifficulty: 1,
     ...overrides
@@ -139,18 +140,59 @@ test("difficulty 0 is refused", async () => {
 
 /* ---------------------------------------------------------------- freshness */
 
-test("a stale stamp is rejected", async () => {
-  const result = await verifyStamp(await makeStamp({ now: NOW - 8 * DAY }), context());
+test("a stale stamp is rejected when an absolute window is configured", async () => {
+  // Two days before the message keeps it contemporaneous, so only the absolute window can reject it.
+  const stamp = await makeStamp({ now: NOW - 8 * DAY });
+  const result = await verifyStamp(stamp, context({ messageTime: NOW - 8 * DAY + 60_000, maxAgeMs: 7 * DAY }));
   assert.equal(result.state, StampState.INVALID);
   assert.equal(result.reason, Reason.STALE);
 });
 
-test("the acceptance window is policy", async () => {
-  const stamp = await makeStamp({ now: NOW - 8 * DAY });
-  assert.equal((await verifyStamp(stamp, context({ maxAgeMs: 30 * DAY }))).state, StampState.STRONG);
+test("without an absolute window a stamp never expires", async () => {
+  const stamp = await makeStamp({ now: NOW - 400 * DAY });
+  const result = await verifyStamp(stamp, context({
+    now: NOW,
+    messageTime: NOW - 400 * DAY + 60_000,
+    maxAgeMs: Number.POSITIVE_INFINITY
+  }));
+  assert.equal(result.state, StampState.STRONG, result.reason);
 });
 
-test("moderate clock skew is tolerated, a far future stamp is not", async () => {
+test("a stamp minted long before its message is refused - stockpiling does not pay", async () => {
+  const stamp = await makeStamp({ now: NOW - 30 * DAY });
+  const result = await verifyStamp(stamp, context({ maxAgeMs: Number.POSITIVE_INFINITY }));
+  assert.equal(result.state, StampState.INVALID);
+  assert.equal(result.reason, Reason.STAMP_TOO_OLD);
+  assert.match(result.detail, /before the message/);
+});
+
+test("the contemporaneity window is what it says: 24 hours passes, 25 does not", async () => {
+  const hour = 60 * 60 * 1000;
+  const within = await makeStamp({ now: NOW - 23 * hour });
+  const outside = await makeStamp({ now: NOW - 25 * hour });
+  const window = { maxStampToMessageMs: 24 * hour, maxAgeMs: Number.POSITIVE_INFINITY };
+  assert.equal((await verifyStamp(within, context(window))).state, StampState.STRONG);
+  assert.equal((await verifyStamp(outside, context(window))).reason, Reason.STAMP_TOO_OLD);
+});
+
+test("an archived message keeps its verdict: old message, old stamp, still strong", async () => {
+  const arrived = NOW - 300 * DAY;
+  const stamp = await makeStamp({ now: arrived - 60_000 });
+  const result = await verifyStamp(stamp, context({
+    now: NOW,
+    messageTime: arrived,
+    maxAgeMs: Number.POSITIVE_INFINITY
+  }));
+  assert.equal(result.state, StampState.STRONG, result.reason);
+});
+
+test("the acceptance window is policy", async () => {
+  const stamp = await makeStamp({ now: NOW - 8 * DAY });
+  const result = await verifyStamp(stamp, context({ messageTime: NOW - 8 * DAY + 60_000, maxAgeMs: 30 * DAY }));
+  assert.equal(result.state, StampState.STRONG, result.reason);
+});
+
+test("moderate clock skew is tolerated, a stamp minted well after its message is not", async () => {
   assert.equal((await verifyStamp(await makeStamp({ now: NOW + 30 * 60 * 1000 }), context())).state,
     StampState.STRONG);
   const far = await verifyStamp(await makeStamp({ now: NOW + 3 * 60 * 60 * 1000 }), context());

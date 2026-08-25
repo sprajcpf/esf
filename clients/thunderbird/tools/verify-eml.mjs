@@ -13,6 +13,7 @@ import { readFile } from "node:fs/promises";
 import { ACCEPTED_HEADER_NAMES, StampState } from "../src/protocol/constants.js";
 import { parseStampList } from "../src/protocol/parser.js";
 import { canonicalMailbox } from "../src/protocol/stamp.js";
+import { messageReference, parseReceivedTime } from "../src/background/verificationService.js";
 import { verifyStamp } from "../src/protocol/verifier.js";
 
 /** Splits an RFC 5322 header block into unfolded name/value pairs. */
@@ -54,6 +55,8 @@ for (const file of files) {
   const subject = get("subject")[0] || "(no subject)";
   const from = get("from")[0] || "";
   const messageId = get("message-id")[0] || "";
+  // A stamp is checked against when its message came into being, not against now - see the verifier.
+  const messageTime = messageReference({ date: get("date")[0] }, parseReceivedTime(get("received")[0]));
   const recipients = override
     ? [canonicalMailbox(override)].filter(Boolean)
     : [...get("to"), ...get("cc")].flatMap(mailboxes);
@@ -65,6 +68,7 @@ for (const file of files) {
   console.log(`from        ${from}`);
   console.log(`recipients  ${recipients.join(", ") || "(none found)"}`);
   console.log(`message-id  ${messageId}`);
+  console.log(`message at  ${new Date(messageTime).toISOString()}`);
 
   if (stampHeaders.length === 0) {
     console.log("stamp       NONE - this message carries no ESF stamp");
@@ -82,12 +86,15 @@ for (const file of files) {
     }
     const stamp = entry.stamp;
     const when = new Date(stamp.timestamp * 1000).toISOString();
+    const lead = Math.round((messageTime - stamp.timestamp * 1000) / 1000);
     console.log(`  alg=${stamp.algorithm} d=${stamp.difficulty} t=${stamp.timestamp} (${when}) ` +
       `nonce=${stamp.nonce} salt=${stamp.salt}`);
+    console.log(`       minted ${lead} s before the message`);
     for (const recipient of recipients) {
       const result = await verifyStamp(stamp, {
         localMailboxes: [recipient],
         from,
+        messageTime,
         // The prototype binds a self-minted identifier, so the carrier Message-ID is not comparable.
         messageId: undefined,
         minDifficulty: 1,

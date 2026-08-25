@@ -69,7 +69,7 @@ export class VerificationService {
     }
     const settings = await this.getSettings();
     const policy = receiverPolicy(settings);
-    const [headerValues, carrierMessageId] = await this.#readHeaders(message);
+    const [headerValues, carrierMessageId, receivedAt] = await this.#readHeaders(message);
     const localMailboxes = await this.getLocalMailboxes();
 
     const outcome = await verifyMessageStamps(headerValues, {
@@ -78,10 +78,11 @@ export class VerificationService {
       // The stamp binds the identifier the sender minted (see composeSigner), so the carrier Message-ID is only used
       // when the sender bound the real one. Passing it unconditionally would reject every prototype stamp.
       messageId: undefined,
-      // Freshness is judged against the message's own date, not against the moment it happens to be opened.
-      // Verifying at display time against Date.now() would turn every archived message stale, flipping a result
-      // that was green on arrival to red weeks later.
-      now: freshnessReference(message),
+      now: Date.now(),
+      // The stamp is checked against when the message came into being, not against the moment it is opened:
+      // verifying at display time would turn every archived message stale weeks after it arrived.
+      messageTime: messageReference(message, receivedAt),
+      maxStampToMessageMs: settings.maxStampToMessageHours * 60 * 60 * 1000,
       // 0 days means a stamp never expires, which is the default.
       maxAgeMs: settings.maxStampAgeDays > 0
         ? settings.maxStampAgeDays * 24 * 60 * 60 * 1000
@@ -123,17 +124,17 @@ export class VerificationService {
    * Prefers messages.getHeaders() (Thunderbird 147+, no MIME parsing); falls back to getFull() on older releases and
    * to getRaw() if both are unavailable.
    *
-   * @returns {Promise<[string[], string]>}
+   * @returns {Promise<[string[], string, number|undefined]>} stamps, Message-ID and the arrival time
    */
   async #readHeaders(message) {
     try {
       if (typeof browser.messages.getHeaders === "function") {
         const headers = await browser.messages.getHeaders(message.id);
-        return [collectStamps(headers), first(headers, "message-id")];
+        return [collectStamps(headers), first(headers, "message-id"), parseReceivedTime(first(headers, "received"))];
       }
       const full = await browser.messages.getFull(message.id, { decodeHeaders: true });
       const headers = (full && full.headers) || {};
-      return [collectStamps(headers), first(headers, "message-id")];
+      return [collectStamps(headers), first(headers, "message-id"), parseReceivedTime(first(headers, "received"))];
     } catch (error) {
       log.warn("header read failed, falling back to getRaw", error);
     }
@@ -142,7 +143,7 @@ export class VerificationService {
       return parseRawHeaders(String(raw));
     } catch (error) {
       log.warn("getRaw failed", error);
-      return [[], ""];
+      return [[], "", undefined];
     }
   }
 
@@ -207,20 +208,45 @@ export class VerificationService {
 }
 
 /**
- * Reference instant for the freshness check: the message's own date, never later than now.
+ * When the message came into being - the instant the stamp has to be contemporaneous with.
  *
- * The date is sender-controlled, so this trades a little strictness for correctness on stored mail. What it cannot
- * be used for is smuggling a stale stamp past the check, because a message claiming to be old also *presents* as
- * old, the stamp is still bound to one recipient, and the replay ledger still refuses a second use.
+ * Preference order matters for security: the timestamp of the *topmost* Received field is written by the receiving
+ * infrastructure and is therefore not the sender's to choose, so it is used when available. The Date header is the
+ * fallback; it is sender-controlled, which is why a stockpiled stamp can only be smuggled past this check by also
+ * back-dating the message - and a message that presents itself as weeks old is a signal in its own right.
+ *
+ * Never later than now, so a future-dated message cannot buy itself extra room.
  *
  * @param {{date?: Date|string|number}} message a MessageHeader
+ * @param {number} [receivedAt] milliseconds parsed from the topmost Received field, if any
  * @param {number} [now]
  * @returns {number} milliseconds since the epoch
  */
-export function freshnessReference(message, now = Date.now()) {
+export function messageReference(message, receivedAt, now = Date.now()) {
+  if (Number.isFinite(receivedAt)) {
+    return Math.min(receivedAt, now);
+  }
   const raw = message && message.date;
-  const stamped = raw instanceof Date ? raw.getTime() : Number(new Date(raw ?? Number.NaN));
-  return Number.isFinite(stamped) ? Math.min(stamped, now) : now;
+  const dated = raw instanceof Date ? raw.getTime() : Number(new Date(raw ?? Number.NaN));
+  return Number.isFinite(dated) ? Math.min(dated, now) : now;
+}
+
+/**
+ * Parses the timestamp out of a Received field: the date follows the final semicolon (RFC 5322 section 3.6.7).
+ *
+ * @param {string} received
+ * @returns {number|undefined} milliseconds, or undefined when there is nothing usable
+ */
+export function parseReceivedTime(received) {
+  if (typeof received !== "string") {
+    return undefined;
+  }
+  const semicolon = received.lastIndexOf(";");
+  if (semicolon === -1) {
+    return undefined;
+  }
+  const parsed = Date.parse(received.slice(semicolon + 1).trim());
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 /** Collects every accepted stamp header field (X-ESF-Stamp and the standards-track ESF-Stamp). */
@@ -262,6 +288,7 @@ export function parseRawHeaders(raw) {
   }
   const values = [];
   let messageId = "";
+  let receivedAt;
   for (const line of unfolded) {
     const colon = line.indexOf(":");
     if (colon < 1) {
@@ -273,7 +300,9 @@ export function parseRawHeaders(raw) {
       values.push(value);
     } else if (name === "message-id" && !messageId) {
       messageId = value;
+    } else if (name === "received" && receivedAt === undefined) {
+      receivedAt = parseReceivedTime(value);
     }
   }
-  return [values, messageId];
+  return [values, messageId, receivedAt];
 }
