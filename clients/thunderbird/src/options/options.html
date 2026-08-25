@@ -2,15 +2,23 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ESF — Proof of Work settings</title>
+  <title>ESF — settings</title>
   <link rel="stylesheet" href="../ui/common.css">
   <link rel="stylesheet" href="options.css">
 </head>
 <body class="options">
-  <h1>End-Spam-Forever — Proof of Work</h1>
+  <header class="brand">
+    <img src="../../icons/esf.svg" alt="" width="40" height="40">
+    <div>
+      <h1>End Spam Forever</h1>
+      <p class="tagline">Proof-of-work stamps for outgoing mail, verification for incoming mail.</p>
+    </div>
+  </header>
+
   <p class="hint">
-    A proof of work shows that a sender spent measurable CPU time on this specific message and recipient. It is a
-    cost signal, not authentication: it says nothing about <em>who</em> sent the mail.
+    An ESF stamp shows that a sender spent measurable computing time for this specific recipient. It is a
+    scarce-resource signal, not authentication: it says nothing about <em>who</em> sent a message, or whether its
+    content is safe. ESF complements SPF, DKIM and DMARC rather than replacing them.
   </p>
 
   <form id="form">
@@ -19,12 +27,12 @@
 
       <label class="check">
         <input type="checkbox" name="enabled">
-        <span>Enable Proof of Work for outgoing messages</span>
+        <span>Attach an ESF stamp to outgoing messages</span>
       </label>
 
       <label>
-        <span>Outgoing difficulty</span>
-        <select name="outgoingBits">
+        <span>Baseline difficulty</span>
+        <select name="outgoingDifficulty">
           <option value="0">Disabled</option>
           <option value="18">18 bits</option>
           <option value="20">20 bits</option>
@@ -35,7 +43,7 @@
       </label>
 
       <label>
-        <span>Maximum computation time</span>
+        <span>Maximum computation time per recipient</span>
         <span class="inline"><input type="number" name="maxComputeSeconds" min="1" max="120" step="1"> seconds</span>
       </label>
 
@@ -43,7 +51,7 @@
         <span>When the time limit is reached</span>
         <select name="onTimeout">
           <option value="ask">Ask me</option>
-          <option value="send-without">Send without proof</option>
+          <option value="send-without">Send without a stamp</option>
           <option value="cancel">Cancel the send</option>
         </select>
       </label>
@@ -51,10 +59,14 @@
       <label>
         <span>Bcc recipients</span>
         <select name="bccMode">
-          <option value="hashed">Bind by hashed address (rid=)</option>
-          <option value="skip">No proof for Bcc recipients</option>
+          <option value="omit">No stamp for Bcc (recommended)</option>
+          <option value="token">Include the salted recipient token</option>
         </select>
       </label>
+      <p class="hint indent">
+        A header field is visible to every recipient. Including a Bcc token lets that recipient verify their stamp,
+        but someone who already suspects an address can test that guess against the token.
+      </p>
 
       <label>
         <span>Worker threads</span>
@@ -65,8 +77,8 @@
       </label>
 
       <label class="check">
-        <input type="checkbox" name="adaptiveDifficulty">
-        <span>Adaptive difficulty per recipient (currently equivalent to the fixed setting)</span>
+        <input type="checkbox" name="trustAwareDifficulty">
+        <span>Trust-aware difficulty per recipient (currently equivalent to the fixed baseline)</span>
       </label>
     </fieldset>
 
@@ -74,27 +86,31 @@
       <legend>Incoming</legend>
 
       <label>
-        <span>Accept proofs up to</span>
-        <span class="inline"><input type="number" name="maxProofAgeDays" min="1" max="365" step="1"> days old</span>
+        <span>Accept stamps up to</span>
+        <span class="inline"><input type="number" name="maxStampAgeDays" min="1" max="365" step="1"> days old</span>
       </label>
 
       <label>
-        <span>Minimum accepted difficulty</span>
-        <span class="inline"><input type="number" name="minIncomingBits" min="1" max="30" step="1"> bits</span>
+        <span>Minimum difficulty for a green result</span>
+        <span class="inline"><input type="number" name="minIncomingDifficulty" min="1" max="30" step="1"> bits</span>
       </label>
+      <p class="hint indent">
+        Valid stamps below this threshold stay yellow instead of green. Difficulty numbers are only comparable within
+        one work profile.
+      </p>
 
       <label class="check">
         <input type="checkbox" name="showBadge">
-        <span>Show verification badge on displayed messages</span>
+        <span>Show the ESF traffic light on displayed messages</span>
       </label>
 
       <label class="check">
-        <input type="checkbox" name="markMissingAsJunk">
-        <span>Mark messages without a valid proof as junk</span>
+        <input type="checkbox" name="junkOnRed">
+        <span>Mark red messages as junk</span>
       </label>
       <p class="hint indent">
-        Almost no mail carries a proof today, so this will flag most of your inbox. Leave it off unless you know what
-        you are doing.
+        Almost no mail carries a stamp today, so this will flag most of your inbox. During adoption, a missing stamp
+        should not be treated as malicious.
       </p>
     </fieldset>
 

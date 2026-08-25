@@ -1,184 +1,228 @@
 /**
- * Verification of incoming proofs.
+ * ESF-Stamp verification, following the ordering of whitepaper 6.7 and appendix B: cheapest checks first, no
+ * cryptographic work before the declared parameters are known to be within local bounds.
  *
- * Cost model: verifying one header is exactly one SHA-256 invocation plus a handful of string checks, independent of
- * the declared difficulty. That is what makes the scheme asymmetric - and it is why the verifier must never derive
- * any amount of work from attacker-controlled values.
+ * Cost model: verifying one stamp is exactly one SHA-256 invocation plus a handful of string comparisons, whatever
+ * difficulty the sender declares. That asymmetry is the whole point, and it is why the verifier must never derive an
+ * amount of work from an attacker-controlled value.
  */
 
 import {
-  MAX_ACCEPTED_DIFFICULTY,
+  IMPLEMENTED_ALGORITHMS,
+  KNOWN_ALGORITHMS,
   MAX_CLOCK_SKEW_MS,
-  MAX_HEADERS_PER_MESSAGE,
-  MIN_ACCEPTED_DIFFICULTY,
+  MAX_DECLARED_DIFFICULTY,
+  MAX_STAMPS_PER_HEADER,
+  MAX_STAMPS_PER_MESSAGE,
+  MIN_DECLARED_DIFFICULTY,
   Reason,
-  SUPPORTED_ALGORITHMS,
-  SUPPORTED_VERSIONS,
-  VerificationStatus
+  SIGNAL_BY_STATE,
+  StampState,
+  SUPPORTED_VERSIONS
 } from "./constants.js";
-import { countLeadingZeroBits, toHex } from "./hash.js";
-import { parseProofHeader } from "./parser.js";
-import { buildPreimageBase, hashCandidate, normalizeAddress, normalizeMessageId, parseTimestamp, recipientId }
-  from "./pow.js";
+import { countLeadingZeroBits, sha256, toHex } from "./hash.js";
+import { parseStampList, serializeStamp } from "./parser.js";
+import { buildWorkBase, hashCandidate, messageIdToken, recipientToken, senderToken } from "./stamp.js";
 
 /**
  * @typedef {object} VerifyContext
- * @property {string[]} localAddresses addresses the receiving user owns; a proof must be bound to one of them
- * @property {string} [messageId] Message-ID of the carrying message, used when the header omits `mid`
+ * @property {string[]} localMailboxes mailboxes the receiving user owns; a stamp must bind to one of them
+ * @property {string} [from] the message's From mailbox, checked against sid
+ * @property {string} [messageId] the message's Message-ID, checked against mid
  * @property {number} [now] current time in ms, injectable for tests
- * @property {number} [maxAgeMs] acceptance window
+ * @property {number} [maxAgeMs] freshness window
  * @property {number} [clockSkewMs] tolerance for senders whose clock runs ahead
- * @property {number} [maxBits] highest difficulty we are willing to accept as declared
- * @property {number} [minBits] lowest difficulty that still counts as a valid proof
- * @property {boolean} [requireMessageIdMatch] when the header carries `mid`, require it to match the message
+ * @property {number} [maxDifficulty] highest difficulty we accept as declared
+ * @property {number} [minDifficulty] below this a valid stamp counts as weak, not strong
+ * @property {boolean} [requireSenderBinding] treat a missing/mismatching sid as invalid rather than ignoring it
  */
-
-function result(status, reason, extra = {}) {
-  return { status, reason, ...extra };
-}
 
 /**
- * Verifies a single parsed proof.
+ * Verifies a single parsed stamp.
  *
- * @param {object} proof output of parseProofHeader().proof
+ * @param {object} stamp output of parseStamp().stamp
  * @param {VerifyContext} context
+ * @returns {Promise<object>} a result carrying state, signal, reason and diagnostics
  */
-export async function verifyProof(proof, context) {
+export async function verifyStamp(stamp, context) {
   const now = context.now ?? Date.now();
   const maxAgeMs = context.maxAgeMs ?? 7 * 24 * 60 * 60 * 1000;
   const clockSkewMs = context.clockSkewMs ?? MAX_CLOCK_SKEW_MS;
-  const maxBits = Math.min(context.maxBits ?? MAX_ACCEPTED_DIFFICULTY, MAX_ACCEPTED_DIFFICULTY);
-  const minBits = Math.max(context.minBits ?? MIN_ACCEPTED_DIFFICULTY, MIN_ACCEPTED_DIFFICULTY);
+  const maxDifficulty = Math.min(context.maxDifficulty ?? MAX_DECLARED_DIFFICULTY, MAX_DECLARED_DIFFICULTY);
+  const minDifficulty = Math.max(context.minDifficulty ?? MIN_DECLARED_DIFFICULTY, MIN_DECLARED_DIFFICULTY);
   const started = Date.now();
-  // Every outcome reports how long verification took, so "cheap to verify" stays measurable rather than assumed.
-  const result = (status, reason, extra = {}) =>
-    ({ status, reason, verificationMs: Date.now() - started, ...extra });
 
-  if (!SUPPORTED_VERSIONS.has(proof.version)) {
-    return result(VerificationStatus.INVALID, Reason.UNSUPPORTED_VERSION, { detail: `v=${proof.version}` });
+  const outcome = (state, reason, extra = {}) => ({
+    state,
+    signal: SIGNAL_BY_STATE[state],
+    reason,
+    difficulty: stamp.difficulty,
+    algorithm: stamp.algorithm,
+    timestamp: stamp.timestamp,
+    verificationMs: Date.now() - started,
+    stamp,
+    ...extra
+  });
+
+  if (!SUPPORTED_VERSIONS.has(stamp.version)) {
+    return outcome(StampState.UNSUPPORTED, Reason.UNSUPPORTED_VERSION, { detail: `v=${stamp.version}` });
   }
-  if (!SUPPORTED_ALGORITHMS.has(proof.algorithm)) {
-    return result(VerificationStatus.INVALID, Reason.UNSUPPORTED_ALGORITHM, { detail: proof.algorithm });
+  // An unimplemented but registered profile is "unsupported", not invalid: we must never guess, and never run
+  // attacker-selected work (whitepaper 11.1, 12).
+  if (!IMPLEMENTED_ALGORITHMS.has(stamp.algorithm)) {
+    const known = KNOWN_ALGORITHMS.has(stamp.algorithm);
+    return outcome(StampState.UNSUPPORTED, Reason.UNSUPPORTED_ALGORITHM, {
+      detail: known ? `${stamp.algorithm} (ESF v1 profile, not implemented here)` : stamp.algorithm
+    });
   }
-  // A hostile sender may declare any difficulty. Refuse implausible declarations before doing anything else.
-  if (!Number.isInteger(proof.bits) || proof.bits > maxBits) {
-    return result(VerificationStatus.INVALID, Reason.DIFFICULTY_OUT_OF_RANGE, { detail: `bits=${proof.bits}` });
+  if (!Number.isInteger(stamp.difficulty) || stamp.difficulty > maxDifficulty) {
+    return outcome(StampState.INVALID, Reason.DIFFICULTY_OUT_OF_RANGE, { detail: `d=${stamp.difficulty}` });
   }
-  if (proof.bits < minBits) {
-    return result(VerificationStatus.INVALID, Reason.DIFFICULTY_TOO_LOW, { detail: `bits=${proof.bits}` });
+  if (stamp.difficulty < MIN_DECLARED_DIFFICULTY) {
+    return outcome(StampState.INVALID, Reason.DIFFICULTY_OUT_OF_RANGE, { detail: `d=${stamp.difficulty}` });
   }
 
-  const timestamp = parseTimestamp(proof.timestamp);
-  if (!timestamp) {
-    return result(VerificationStatus.INVALID, Reason.MALFORMED, { detail: "unparseable timestamp" });
-  }
-  const age = now - timestamp.getTime();
+  const timestampMs = stamp.timestamp * 1000;
+  const age = now - timestampMs;
   if (age > maxAgeMs) {
-    return result(VerificationStatus.INVALID, Reason.EXPIRED, { detail: `${Math.round(age / 86400000)} days old` });
+    return outcome(StampState.INVALID, Reason.STALE, { detail: `${Math.round(age / 86400000)} days old`, timestampMs });
   }
   if (age < -clockSkewMs) {
-    return result(VerificationStatus.INVALID, Reason.FUTURE_TIMESTAMP, { detail: proof.timestamp });
+    return outcome(StampState.INVALID, Reason.FUTURE_TIMESTAMP, { detail: `${Math.round(-age / 1000)}s ahead` });
   }
 
-  // Recipient binding. Either the plaintext address matches one of ours, or the hashed form does. Without this a
-  // proof computed for someone else could simply be replayed at us.
-  const candidates = (context.localAddresses || []).map(normalizeAddress).filter(Boolean);
+  // Recipient binding: recompute rid for each of our own mailboxes. Without this, a stamp minted for somebody else
+  // could simply be replayed at us.
   let matchedRecipient = null;
-  if (proof.recipient) {
-    matchedRecipient = candidates.includes(proof.recipient) ? proof.recipient : null;
-  } else {
-    for (const candidate of candidates) {
-      if (await recipientId(proof.salt, candidate) === proof.recipientHash) {
-        matchedRecipient = candidate;
-        break;
-      }
+  for (const mailbox of context.localMailboxes || []) {
+    if (await recipientToken(mailbox, stamp.salt) === stamp.rid) {
+      matchedRecipient = mailbox;
+      break;
     }
   }
   if (!matchedRecipient) {
-    return result(VerificationStatus.INVALID, Reason.RECIPIENT_MISMATCH, {
-      detail: proof.recipient || `rid=${String(proof.recipientHash).slice(0, 12)}...`
-    });
+    return outcome(StampState.INVALID, Reason.WRONG_RECIPIENT, { detail: `rid=${stamp.rid.slice(0, 10)}...` });
   }
 
-  const carrierMessageId = normalizeMessageId(context.messageId || "");
-  if (proof.messageId && context.requireMessageIdMatch && carrierMessageId && proof.messageId !== carrierMessageId) {
-    return result(VerificationStatus.INVALID, Reason.MESSAGE_ID_MISMATCH, { detail: proof.messageId });
+  // Sender binding. A mismatch means the stamp was not minted for this From, so it was moved between messages.
+  let senderBound = null;
+  if (context.from) {
+    senderBound = await senderToken(context.from) === stamp.sid;
+    if (!senderBound && context.requireSenderBinding !== false) {
+      return outcome(StampState.INVALID, Reason.SENDER_MISMATCH, { detail: `sid=${stamp.sid.slice(0, 10)}...`,
+        matchedRecipient });
+    }
   }
-  // The header carries the id the proof was computed for; fall back to the message's own id for older senders.
-  const boundMessageId = proof.messageId || carrierMessageId;
 
-  const base = buildPreimageBase({
-    version: proof.version,
-    recipient: matchedRecipient,
-    timestamp: proof.timestamp,
-    messageId: boundMessageId,
-    salt: proof.salt
+  // Message binding.
+  let messageBound = null;
+  if (context.messageId) {
+    messageBound = await messageIdToken(context.messageId) === stamp.mid;
+    if (!messageBound) {
+      return outcome(StampState.INVALID, Reason.MESSAGE_MISMATCH, { detail: `mid=${stamp.mid.slice(0, 10)}...`,
+        matchedRecipient });
+    }
+  }
+
+  // Exactly one work operation, independent of the declared difficulty.
+  const workBase = buildWorkBase({
+    algorithm: stamp.algorithm,
+    difficulty: stamp.difficulty,
+    timestamp: stamp.timestamp,
+    sid: stamp.sid,
+    rid: stamp.rid,
+    mid: stamp.mid,
+    salt: stamp.salt,
+    profileParams: stamp.profileParams
   });
-  const digest = await hashCandidate(base, proof.nonce);
+  const digest = await hashCandidate(workBase, stamp.nonce);
   const leadingZeroBits = countLeadingZeroBits(digest);
-  const hash = toHex(digest);
-  const common = {
-    bits: proof.bits,
+  const diagnostics = {
     leadingZeroBits,
-    hash,
+    hash: toHex(digest),
     matchedRecipient,
-    timestamp: proof.timestamp,
-    timestampMs: timestamp.getTime(),
-    algorithm: proof.algorithm,
-    verificationMs: Date.now() - started,
-    proof
+    senderBound,
+    messageBound,
+    timestampMs
   };
-  if (leadingZeroBits < proof.bits) {
-    return result(VerificationStatus.INVALID, Reason.INSUFFICIENT_WORK, common);
+  if (leadingZeroBits < stamp.difficulty) {
+    return outcome(StampState.INVALID, Reason.INSUFFICIENT_WORK, diagnostics);
   }
-  return result(VerificationStatus.VALID, Reason.OK, common);
+  // Real work, but less than this receiver's policy asks for: valid and yellow, not invalid (whitepaper 11.1).
+  if (stamp.difficulty < minDifficulty) {
+    return outcome(StampState.WEAK, Reason.BELOW_POLICY, { ...diagnostics, requiredDifficulty: minDifficulty });
+  }
+  return outcome(StampState.STRONG, Reason.OK, diagnostics);
 }
 
 /**
- * Verifies every X-Email-PoW header of a message and reduces them to a single outcome.
+ * Verifies every stamp of a message and reduces them to one outcome.
  *
- * Only the first MAX_HEADERS_PER_MESSAGE headers are looked at: a message carrying thousands of headers must not be
- * able to keep us busy.
+ * Bounded on both axes: at most MAX_STAMPS_PER_MESSAGE header fields and MAX_STAMPS_PER_HEADER stamps in total, so a
+ * message stuffed with stamps cannot keep the verifier busy (whitepaper 6.7 step 1, 12 "header bombing").
  *
- * @param {string[]} headerValues
+ * @param {string[]} headerValues every ESF-Stamp / X-ESF-Stamp field value of the message
  * @param {VerifyContext} context
- * @returns {Promise<{status: string, reason: string, best: object|null, results: object[], skipped: number}>}
+ * @returns {Promise<{state: string, signal: string, reason: string, best: object|null, results: object[],
+ *                    skipped: number}>}
  */
-export async function verifyMessageHeaders(headerValues, context) {
+export async function verifyMessageStamps(headerValues, context) {
   const values = Array.isArray(headerValues) ? headerValues : [];
-  const considered = values.slice(0, MAX_HEADERS_PER_MESSAGE);
-  const skipped = values.length - considered.length;
+  const considered = values.slice(0, MAX_STAMPS_PER_MESSAGE);
+  let skipped = values.length - considered.length;
   if (considered.length === 0) {
-    return { status: VerificationStatus.MISSING, reason: Reason.NO_HEADER, best: null, results: [], skipped };
+    return {
+      state: StampState.MISSING,
+      signal: SIGNAL_BY_STATE[StampState.MISSING],
+      reason: Reason.NO_STAMP,
+      best: null,
+      results: [],
+      skipped
+    };
+  }
+
+  const entries = [];
+  for (const value of considered) {
+    for (const parsed of parseStampList(value)) {
+      if (entries.length >= MAX_STAMPS_PER_HEADER) {
+        skipped++;
+        continue;
+      }
+      entries.push({ parsed, value });
+    }
   }
 
   const results = [];
-  for (const value of considered) {
-    const parsed = parseProofHeader(value);
+  for (const { parsed, value } of entries) {
     if (!parsed.ok) {
-      results.push(result(VerificationStatus.INVALID, parsed.reason, { detail: parsed.detail, raw: value }));
+      results.push({
+        state: StampState.INVALID,
+        signal: SIGNAL_BY_STATE[StampState.INVALID],
+        reason: parsed.reason,
+        detail: parsed.detail,
+        raw: value.slice(0, 120),
+        verificationMs: 0
+      });
       continue;
     }
-    results.push(await verifyProof(parsed.proof, context));
+    results.push(await verifyStamp(parsed.stamp, context));
   }
 
-  // A message can carry one proof per recipient, so exactly one of them is expected to be bound to us. A valid proof
-  // therefore wins over any number of proofs that are simply addressed to someone else.
-  const valid = results.filter(item => item.status === VerificationStatus.VALID);
-  if (valid.length > 0) {
-    const best = valid.reduce((a, b) => (b.bits > a.bits ? b : a));
-    return { status: VerificationStatus.VALID, reason: Reason.OK, best, results, skipped };
-  }
-  const addressedToUs = results.find(item => item.reason !== Reason.RECIPIENT_MISMATCH);
-  const best = addressedToUs || results[0];
-  return { status: VerificationStatus.INVALID, reason: best.reason, best, results, skipped };
+  // A message carries one stamp per recipient, so at most one of them binds to us. Rank by usefulness: a strong
+  // stamp beats a weak one, which beats an unsupported profile, which beats anything invalid.
+  const rank = { [StampState.STRONG]: 4, [StampState.WEAK]: 3, [StampState.UNSUPPORTED]: 2, [StampState.INVALID]: 1 };
+  const boundToUs = results.filter(item => item.reason !== Reason.WRONG_RECIPIENT);
+  const pool = boundToUs.length > 0 ? boundToUs : results;
+  const best = pool.reduce((a, b) => ((rank[b.state] || 0) > (rank[a.state] || 0) ? b : a));
+  return { state: best.state, signal: best.signal, reason: best.reason, best, results, skipped };
 }
 
 /**
- * Stable key for replay bookkeeping: a proof is only ever legitimate for one recipient and one digest.
+ * Replay identifier: SHA-256 of the canonical stamp serialisation (whitepaper 6.8).
  *
- * @param {{matchedRecipient: string, hash: string}} verified
+ * @param {object} stamp
+ * @returns {Promise<string>} hex digest
  */
-export function replayKey(verified) {
-  return `${verified.matchedRecipient}|${verified.hash}`;
+export async function stampId(stamp) {
+  return toHex(await sha256(serializeStamp(stamp)));
 }

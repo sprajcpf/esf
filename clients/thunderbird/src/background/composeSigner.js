@@ -1,16 +1,27 @@
 /**
- * Outgoing side: hooks compose.onBeforeSend, computes one proof per recipient and injects the X-Email-PoW headers.
+ * Outgoing side: hooks compose.onBeforeSend, mints one ESF stamp per recipient and attaches the header field
+ * (whitepaper 6.6, 10.1).
  *
- * Bcc handling: a header is visible to every recipient of the message, so writing a Bcc address into `rcpt` would
- * leak it. Bcc recipients therefore get `rid=sha256(salt|address)` instead - a Bcc'd recipient can still verify the
- * proof (they know their own address), while other recipients only see an opaque digest. Users who consider even
- * that too much can switch Bcc handling to "skip" in the options.
+ * Bcc (whitepaper 6.9): a header field is visible to every recipient, so a Bcc recipient's binding token must not be
+ * exposed unless it is safe. The preferred solution is a separate message copy per Bcc recipient, which a
+ * MailExtension cannot create from the send hook. This client therefore offers two honest options:
+ *
+ *   "omit" (default) - no stamp for Bcc recipients, per the whitepaper's fallback recommendation
+ *   "token"          - include the salted rid, which a determined observer with a guess list can test
  */
 
-import { HEADER_NAME, PROTOCOL_VERSION } from "../protocol/constants.js";
-import { resolveOutgoingBits } from "../protocol/policy.js";
-import { serializeProof } from "../protocol/parser.js";
-import { buildPreimageBase, formatTimestamp, generateSalt, normalizeAddress, recipientId } from "../protocol/pow.js";
+import { ALGORITHM_SHA256, HEADER_NAME, PROTOCOL_VERSION } from "../protocol/constants.js";
+import { resolveOutgoingDifficulty } from "../protocol/policy.js";
+import { serializeStampList } from "../protocol/parser.js";
+import {
+  buildWorkBase,
+  canonicalMailbox,
+  generateSalt,
+  messageIdToken,
+  recipientToken,
+  senderToken,
+  unixSeconds
+} from "../protocol/stamp.js";
 import { resolveWorkerCount } from "../utils/settings.js";
 import { createLogger } from "../utils/log.js";
 
@@ -27,22 +38,22 @@ export const ComposePhase = {
 };
 
 /**
- * Flattens a ComposeRecipientList into plain addresses.
- * Address book contacts/mailing lists arrive as {id, type} nodes; those cannot be expanded here, so they are counted
- * and reported instead of silently dropped.
+ * Flattens a ComposeRecipientList into canonical mailboxes.
+ * Address book contacts and mailing lists arrive as {id, type} nodes; those cannot be expanded here, so they are
+ * counted and reported instead of silently dropped.
  *
  * @param {any} list
- * @returns {{addresses: string[], unresolved: number}}
+ * @returns {{mailboxes: string[], unresolved: number}}
  */
 export function flattenRecipients(list) {
   const entries = list === undefined || list === null ? [] : Array.isArray(list) ? list : [list];
-  const addresses = [];
+  const mailboxes = [];
   let unresolved = 0;
   for (const entry of entries) {
     if (typeof entry === "string") {
-      const address = normalizeAddress(entry);
-      if (address) {
-        addresses.push(address);
+      const mailbox = canonicalMailbox(entry);
+      if (mailbox) {
+        mailboxes.push(mailbox);
       } else {
         unresolved++;
       }
@@ -50,7 +61,7 @@ export function flattenRecipients(list) {
       unresolved++;
     }
   }
-  return { addresses: [...new Set(addresses)], unresolved };
+  return { mailboxes: [...new Set(mailboxes)], unresolved };
 }
 
 export class ComposeSigner {
@@ -59,13 +70,16 @@ export class ComposeSigner {
    * @param {import("./solver.js").PowSolver} deps.solver
    * @param {() => Promise<object>} deps.getSettings
    * @param {(tabId: number, state: object) => void} deps.onStateChange
-   * @param {(tabId: number) => Promise<"continue"|"send-without"|"cancel">} deps.askUser
+   * @param {(tabId: number) => Promise<void>} deps.askUser
+   * @param {(details: object) => Promise<string>} [deps.resolveFrom] resolves the sending mailbox for sid
    */
-  constructor({ solver, getSettings, onStateChange, askUser }) {
+  constructor({ solver, getSettings, onStateChange, askUser, resolveFrom }) {
     this.solver = solver;
     this.getSettings = getSettings;
     this.onStateChange = onStateChange;
     this.askUser = askUser;
+    // ComposeDetails.from may be an address book node rather than a string, so the caller resolves the identity.
+    this.resolveFrom = resolveFrom || (async details => (typeof details.from === "string" ? details.from : ""));
     /** @type {Map<number, object>} tabId -> live state for the compose popup */
     this.states = new Map();
     /** @type {Map<number, AbortController>} */
@@ -85,7 +99,7 @@ export class ComposeSigner {
     return next;
   }
 
-  /** Resolves a pending "what should I do" question from the compose popup. */
+  /** Resolves a pending "this is taking long" question from the compose popup. */
   resolveDecision(tabId, decision) {
     const resolver = this.pendingDecisions.get(tabId);
     if (resolver) {
@@ -118,70 +132,93 @@ export class ComposeSigner {
       header => String(header.name).toLowerCase() !== HEADER_NAME.toLowerCase()
     );
 
-    if (!settings.enabled || settings.outgoingBits <= 0) {
+    if (!settings.enabled || settings.outgoingDifficulty <= 0) {
       this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "disabled" });
       return {};
     }
 
-    const visible = flattenRecipients(details.to).addresses.concat(flattenRecipients(details.cc).addresses);
-    const bccResult = flattenRecipients(details.bcc);
-    const bcc = settings.bccMode === "skip" ? [] : bccResult.addresses;
-    const targets = [
-      ...new Set(visible).values()
-    ].map(address => ({ address, hidden: false }));
-    for (const address of bcc) {
-      if (!visible.includes(address)) {
-        targets.push({ address, hidden: true });
+    const from = canonicalMailbox(await this.resolveFrom(details));
+    const visible = flattenRecipients(details.to).mailboxes.concat(flattenRecipients(details.cc).mailboxes);
+    const bcc = flattenRecipients(details.bcc);
+    const targets = [...new Set(visible)].map(mailbox => ({ mailbox, hidden: false }));
+    const bccIncluded = settings.bccMode === "token";
+    if (bccIncluded) {
+      for (const mailbox of bcc.mailboxes) {
+        if (!visible.includes(mailbox)) {
+          targets.push({ mailbox, hidden: true });
+        }
       }
     }
+    const skippedBcc = bccIncluded ? 0 : bcc.mailboxes.filter(mailbox => !visible.includes(mailbox)).length;
 
     if (targets.length === 0) {
-      this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "no-recipients" });
+      this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "no-recipients", skippedBcc });
       return {};
     }
 
-    // The final Message-ID is assigned by Thunderbird after the send hook, so the proof is bound to a random
-    // identifier we generate here and publish in the `mid` field instead. See README, "Limitations".
+    // Thunderbird assigns the Message-ID after this hook returns and customHeaders cannot set a non-X- field, so the
+    // stamp binds a message identifier we mint here. See README, "API limitations".
     const messageId = `${crypto.randomUUID()}@esf.invalid`;
-    const timestamp = formatTimestamp(Date.now());
+    const timestamp = unixSeconds();
+    const sid = await senderToken(from);
+    const mid = await messageIdToken(messageId);
     const workerCount = resolveWorkerCount(settings);
     const controller = new AbortController();
     this.controllers.set(tabId, controller);
 
-    const headers = [];
+    const stamps = [];
     let hashesTotal = 0;
     const startedAt = Date.now();
     this.#setState(tabId, {
       phase: ComposePhase.COMPUTING,
-      bits: settings.outgoingBits,
+      difficulty: settings.outgoingDifficulty,
       recipientCount: targets.length,
       completed: 0,
       hashes: 0,
       startedAt,
-      workerCount
+      workerCount,
+      skippedBcc,
+      unresolvedRecipients: flattenRecipients(details.to).unresolved + flattenRecipients(details.cc).unresolved
     });
 
     try {
       for (let index = 0; index < targets.length; index++) {
         const target = targets[index];
-        const { bits } = resolveOutgoingBits({
-          recipient: target.address,
+        const { difficulty } = resolveOutgoingDifficulty({
+          recipient: target.mailbox,
           recipientCount: targets.length,
           settings
         });
-        if (bits <= 0) {
+        if (difficulty <= 0) {
           continue;
         }
 
         const salt = generateSalt();
-        const base = buildPreimageBase({ recipient: target.address, timestamp, messageId, salt });
+        const stamp = {
+          version: PROTOCOL_VERSION,
+          algorithm: ALGORITHM_SHA256,
+          difficulty,
+          timestamp,
+          sid,
+          rid: await recipientToken(target.mailbox, salt),
+          mid,
+          salt,
+          profileParams: {}
+        };
+        const workBase = buildWorkBase(stamp);
         const budgetMs = settings.maxComputeSeconds * 1000;
+        // Resuming after a timeout must continue behind the range already searched; restarting at 0 would retry the
+        // very same candidates and time out again forever.
+        let startOffset = 0;
         let outcome = await this.#solveWithBudget({
-          tabId, base, bits, workerCount, budgetMs, signal: controller.signal, baseHashes: hashesTotal, index
+          tabId, workBase, difficulty, workerCount, budgetMs, signal: controller.signal, baseHashes: hashesTotal,
+          index, startOffset
         });
 
         while (outcome.timedOut) {
-          const decision = await this.#askDecision(tabId, settings, { index, bits });
+          startOffset += outcome.hashes;
+          hashesTotal += outcome.hashes;
+          const decision = await this.#askDecision(tabId, settings, { index, difficulty });
           if (decision === "cancel") {
             this.#setState(tabId, { phase: ComposePhase.CANCELLED });
             return { cancel: true };
@@ -192,7 +229,8 @@ export class ComposeSigner {
           }
           this.#setState(tabId, { phase: ComposePhase.COMPUTING });
           outcome = await this.#solveWithBudget({
-            tabId, base, bits, workerCount, budgetMs, signal: controller.signal, baseHashes: hashesTotal, index
+            tabId, workBase, difficulty, workerCount, budgetMs, signal: controller.signal, baseHashes: hashesTotal,
+            index, startOffset
           });
         }
 
@@ -202,26 +240,14 @@ export class ComposeSigner {
           return { cancel: true };
         }
         if (!outcome.found) {
-          log.warn("no nonce found for", target.address);
+          log.warn("no nonce found for a recipient");
           continue;
         }
-
-        const proof = {
-          version: PROTOCOL_VERSION,
-          algorithm: "sha256",
-          bits,
-          timestamp,
-          recipient: target.hidden ? null : target.address,
-          recipientHash: target.hidden ? await recipientId(salt, target.address) : null,
-          messageId,
-          nonce: outcome.nonce,
-          salt
-        };
-        headers.push({ name: HEADER_NAME, value: serializeProof(proof) });
+        stamps.push({ ...stamp, nonce: outcome.nonce });
         this.#setState(tabId, { completed: index + 1, hashes: hashesTotal });
       }
     } catch (error) {
-      log.error("proof generation failed", error);
+      log.error("stamp generation failed", error);
       this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "error", error: String(error) });
       return { details: { customHeaders: keptHeaders } };
     } finally {
@@ -231,20 +257,27 @@ export class ComposeSigner {
 
     this.#setState(tabId, {
       phase: ComposePhase.DONE,
-      completed: headers.length,
+      completed: stamps.length,
       hashes: hashesTotal,
       elapsedMs: Date.now() - startedAt
     });
-    log.debug(`generated ${headers.length} proof(s) in ${Date.now() - startedAt} ms, ${hashesTotal} hashes`);
-    return { details: { customHeaders: [...keptHeaders, ...headers] } };
+    log.debug(`minted ${stamps.length} stamp(s) in ${Date.now() - startedAt} ms, ${hashesTotal} hashes`);
+    if (stamps.length === 0) {
+      return { details: { customHeaders: keptHeaders } };
+    }
+    // Thunderbird keeps only one custom header per name, so all stamps of a message travel in one field value.
+    const header = { name: HEADER_NAME, value: serializeStampList(stamps) };
+    return { details: { customHeaders: [...keptHeaders, header] } };
   }
 
-  /** Runs one search with a wall-clock budget. A timeout does not discard progress, it just returns for a decision. */
-  async #solveWithBudget({ tabId, base, bits, workerCount, budgetMs, signal, baseHashes, index }) {
-    const deadline = setTimeoutHandle(budgetMs);
+  /** Runs one search with a wall-clock budget. A timeout keeps the progress and returns for a decision. */
+  async #solveWithBudget({ tabId, workBase, difficulty, workerCount, budgetMs, signal, baseHashes, index,
+    startOffset }) {
+    const deadline = deadlineSignal(budgetMs);
     const result = await this.solver.solve({
-      base,
-      bits,
+      workBase,
+      difficulty,
+      startOffset,
       workerCount,
       signal: anySignal([signal, deadline.signal]),
       onProgress: hashes => this.#setState(tabId, { hashes: baseHashes + hashes, completed: index })
@@ -259,19 +292,18 @@ export class ComposeSigner {
       return settings.onTimeout;
     }
     this.#setState(tabId, { phase: ComposePhase.ASKING, ...context });
-    const decision = await new Promise(resolve => {
+    return new Promise(resolve => {
       this.pendingDecisions.set(tabId, resolve);
       this.askUser(tabId).catch(error => {
-        log.warn("cannot open compose popup, falling back to send-without", error);
+        log.warn("cannot open the compose popup, falling back to send-without", error);
         this.resolveDecision(tabId, "send-without");
       });
     });
-    return decision;
   }
 }
 
 /** An AbortSignal that fires after `ms`, plus a flag telling whether it was the timer that fired. */
-function setTimeoutHandle(ms) {
+function deadlineSignal(ms) {
   const controller = new AbortController();
   const handle = { signal: controller.signal, fired: false, clear: () => clearTimeout(timer) };
   const timer = setTimeout(() => {

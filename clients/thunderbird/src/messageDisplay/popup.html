@@ -2,13 +2,19 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Proof of Work</title>
+  <title>ESF</title>
   <link rel="stylesheet" href="../ui/common.css">
 </head>
 <body>
   <div class="status" id="status"><span class="dot"></span><span id="statusText">Checking…</span></div>
   <p class="hint" id="hint"></p>
-  <dl class="details" id="details"></dl>
+  <details id="disclosure">
+    <summary>Details</summary>
+    <dl class="details" id="details"></dl>
+  </details>
+  <p class="hint small">
+    ESF measures computational effort only — never sender identity, truthfulness or safety.
+  </p>
   <div class="actions">
     <button id="recheck">Verify again</button>
     <button id="options">Settings…</button>

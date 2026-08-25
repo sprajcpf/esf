@@ -1,7 +1,7 @@
 /** Options page. Saves on every change; no explicit save button. */
 
 import { DEFAULTS, loadSettings, resolveWorkerCount, saveSettings } from "../utils/settings.js";
-import { buildPreimageBase, searchNonce } from "../protocol/pow.js";
+import { buildWorkBase, generateSalt, searchNonce, unixSeconds } from "../protocol/stamp.js";
 
 const form = document.getElementById("form");
 const savedEl = document.getElementById("saved");
@@ -68,20 +68,24 @@ document.getElementById("benchmark").addEventListener("click", async () => {
   benchmarkResult.textContent = "Measuring…";
   try {
     const settings = await loadSettings();
-    const base = buildPreimageBase({
-      recipient: "benchmark@example.invalid",
-      timestamp: "20260101T000000Z",
-      messageId: "benchmark",
-      salt: "00".repeat(16)
+    const workBase = buildWorkBase({
+      algorithm: "sha256",
+      difficulty: 32,
+      timestamp: unixSeconds(),
+      sid: "A".repeat(43),
+      rid: "B".repeat(43),
+      mid: "C".repeat(43),
+      salt: generateSalt(),
+      profileParams: {}
     });
     const started = performance.now();
     const sample = 60000;
-    // bits: 32 is unreachable within the sample, so this runs exactly `sample` hashes.
-    await searchNonce({ base, bits: 32, maxCandidates: sample, batchSize: 10000 });
+    // Difficulty 32 is unreachable within the sample, so this runs exactly `sample` hashes.
+    await searchNonce({ workBase, difficulty: 32, maxCandidates: sample, batchSize: 10000 });
     const perSecond = sample / ((performance.now() - started) / 1000);
     const workers = resolveWorkerCount(settings);
     const estimates = [18, 20, 22, 24, 26]
-      .map(bits => `${bits} bits ≈ ${formatSeconds(2 ** bits / (perSecond * workers))}`)
+      .map(difficulty => `${difficulty} bits ≈ ${formatSeconds(2 ** difficulty / (perSecond * workers))}`)
       .join(" · ");
     benchmarkResult.textContent =
       `${Math.round(perSecond).toLocaleString()} hashes/s on this thread, ${workers} worker(s): ${estimates}`;

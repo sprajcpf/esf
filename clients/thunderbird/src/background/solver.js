@@ -21,18 +21,19 @@ export class PowSolver {
   }
 
   /**
-   * Searches for a nonce satisfying `bits` leading zero bits.
+   * Searches for a nonce whose digest has at least `difficulty` leading zero bits.
    *
    * @param {object} options
-   * @param {string} options.base preimage base from buildPreimageBase()
-   * @param {number} options.bits
+   * @param {string} options.workBase canonical work input from buildWorkBase()
+   * @param {number} options.difficulty
+   * @param {number} [options.startOffset] first nonce of the range to search; used to resume after a timeout
    * @param {number} [options.workerCount]
    * @param {(hashes: number) => void} [options.onProgress] total hashes across all workers
    * @param {AbortSignal} [options.signal]
    * @returns {Promise<{found: boolean, nonce: string|null, hash: string|null, hashes: number,
    *                    cancelled: boolean, elapsedMs: number}>}
    */
-  solve({ base, bits, workerCount = 2, onProgress, signal }) {
+  solve({ workBase, difficulty, startOffset = 0, workerCount = 2, onProgress, signal }) {
     const jobId = ++jobCounter;
     const startedAt = Date.now();
     const count = Math.max(1, workerCount);
@@ -92,7 +93,15 @@ export class PowSolver {
           log.error("worker failed", error.message || error);
           finish({ found: false, nonce: null, hash: null, cancelled: true, error: String(error.message || error) });
         });
-        worker.postMessage({ type: "solve", jobId, base, bits, startNonce: index, stride: count, batchSize: 5000 });
+        worker.postMessage({
+          type: "solve",
+          jobId,
+          workBase,
+          difficulty,
+          startCounter: startOffset + index,
+          stride: count,
+          batchSize: 5000
+        });
         workers.push(worker);
       }
 

@@ -1,9 +1,9 @@
 /**
- * Regenerates test/vectors.json.
+ * Regenerates test/vectors.json - deterministic ESF-Stamp test vectors for cross-implementation testing.
  *
- * The vectors are fully deterministic: fixed recipient, timestamp, message id and salt, and the nonce is the *first*
- * one found when counting up from 0. Any change to the canonicalisation or to the hash will therefore break the
- * vector test - which is exactly the point.
+ * Everything is fixed: mailboxes, timestamp, salt and Message-ID, and the nonce is the *first* solution found when
+ * counting up from 0. Any change to canonicalisation, token derivation or the canonical work input breaks the vector
+ * test, which is exactly the point. Whitepaper 4.1 asks for reusable test vectors across implementations.
  *
  * Usage: npm run vectors
  */
@@ -12,55 +12,62 @@ import { writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { serializeProof } from "../src/protocol/parser.js";
-import { buildPreimageBase, recipientId, searchNonce } from "../src/protocol/pow.js";
+import { serializeStamp } from "../src/protocol/parser.js";
+import {
+  buildWorkBase,
+  buildWorkInput,
+  messageIdToken,
+  recipientToken,
+  searchNonce,
+  senderToken
+} from "../src/protocol/stamp.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-const CASES = [
-  { name: "8-bit", recipient: "alice@example.com", bits: 8 },
-  { name: "12-bit", recipient: "alice@example.com", bits: 12 },
-  { name: "16-bit", recipient: "bob@example.org", bits: 16 },
-  { name: "20-bit", recipient: "carol@example.net", bits: 20 },
-  { name: "20-bit-hidden-recipient", recipient: "dave@example.net", bits: 20, hidden: true }
-];
-
-const TIMESTAMP = "20260825T103800Z";
-const MESSAGE_ID = "6f1a2c34-0000-4000-8000-000000000001@esf.invalid";
+const FROM = "Sender <Sender@Example.ORG>";
+const MESSAGE_ID = "<6f1a2c34-0000-4000-8000-000000000001@esf.invalid>";
+const TIMESTAMP = 1787651400;
 const SALT = "8f2c1d4ea7b3906512c0de77a15be340";
+
+const CASES = [
+  { name: "d8", recipient: "alice@example.com", difficulty: 8 },
+  { name: "d12", recipient: "alice@example.com", difficulty: 12 },
+  { name: "d16", recipient: "Bob.Smith@Example.ORG", difficulty: 16 },
+  { name: "d20", recipient: "carol@example.net", difficulty: 20 },
+  { name: "d12-mixed-case-local-part", recipient: "CaseSensitive@example.net", difficulty: 12 }
+];
 
 const vectors = [];
 for (const testCase of CASES) {
-  const base = buildPreimageBase({
-    recipient: testCase.recipient,
-    timestamp: TIMESTAMP,
-    messageId: MESSAGE_ID,
-    salt: SALT
-  });
-  const result = await searchNonce({ base, bits: testCase.bits, batchSize: 50000 });
-  const proof = {
+  const stamp = {
     version: 1,
     algorithm: "sha256",
-    bits: testCase.bits,
+    difficulty: testCase.difficulty,
     timestamp: TIMESTAMP,
-    recipient: testCase.hidden ? null : testCase.recipient,
-    recipientHash: testCase.hidden ? await recipientId(SALT, testCase.recipient) : null,
-    messageId: MESSAGE_ID,
-    nonce: result.nonce,
-    salt: SALT
+    sid: await senderToken(FROM),
+    rid: await recipientToken(testCase.recipient, SALT),
+    mid: await messageIdToken(MESSAGE_ID),
+    salt: SALT,
+    profileParams: {}
   };
+  const workBase = buildWorkBase(stamp);
+  const result = await searchNonce({ workBase, difficulty: testCase.difficulty, batchSize: 50000 });
+  const complete = { ...stamp, nonce: result.nonce };
   vectors.push({
     name: testCase.name,
+    from: FROM,
     recipient: testCase.recipient,
-    hiddenRecipient: testCase.hidden === true,
-    timestamp: TIMESTAMP,
     messageId: MESSAGE_ID,
+    timestamp: TIMESTAMP,
     salt: SALT,
-    bits: testCase.bits,
+    difficulty: testCase.difficulty,
+    sid: stamp.sid,
+    rid: stamp.rid,
+    mid: stamp.mid,
     nonce: result.nonce,
     hash: result.hash,
-    preimage: `${base}|${result.nonce}`,
-    header: serializeProof(proof)
+    workInput: buildWorkInput(stamp, result.nonce),
+    header: serializeStamp(complete)
   });
   console.log(`${testCase.name}: nonce=${result.nonce} after ${result.hashes} hashes`);
 }

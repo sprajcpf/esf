@@ -4,20 +4,18 @@ import { sha256Bytes } from "./sha256.js";
 
 const encoder = new TextEncoder();
 
-function subtle() {
-  const webcrypto = globalThis.crypto;
-  if (!webcrypto || !webcrypto.subtle) {
-    throw new Error("WebCrypto (crypto.subtle) is not available in this context");
-  }
-  return webcrypto.subtle;
-}
-
 /**
  * @param {string} text
  * @returns {Promise<Uint8Array>} raw 32 byte digest
  */
 export async function sha256(text) {
-  const digest = await subtle().digest("SHA-256", encoder.encode(text));
+  const webcrypto = globalThis.crypto;
+  // Outlook's event-based add-ins may run in a JavaScript-only runtime without WebCrypto; the bundled pure-JS
+  // implementation is digest-identical, so every client sees the same tokens either way.
+  if (!webcrypto || !webcrypto.subtle) {
+    return sha256Bytes(encoder.encode(text));
+  }
+  const digest = await webcrypto.subtle.digest("SHA-256", encoder.encode(text));
   return new Uint8Array(digest);
 }
 
@@ -72,6 +70,20 @@ export function fromHex(hex) {
     out[i] = Number.parseInt(hex.substr(i * 2, 2), 16);
   }
   return out;
+}
+
+/**
+ * BASE64URL without padding - the encoding used for the sid/rid/mid binding tokens (whitepaper 6.3).
+ *
+ * @param {Uint8Array} bytes
+ * @returns {string}
+ */
+export function toBase64Url(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
 /** Cryptographically random hex string of `byteLength` bytes. */

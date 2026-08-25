@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "ESF — End-Spam-Forever",
+  "name": "ESF — End Spam Forever",
   "version": "0.1.0",
   "author": "PowerFolder",
-  "description": "Attaches a lightweight Proof-of-Work header to outgoing mail and verifies it on incoming mail.",
+  "description": "Proof-of-work stamps for outgoing mail and ESF verification for incoming mail.",
   "homepage_url": "https://github.com/sprajcpf/esf",
 
   "browser_specific_settings": {
@@ -22,20 +22,19 @@
   ],
 
   "background": {
-    "scripts": ["src/background/background.js"],
-    "type": "module"
+    "page": "src/background/background.html"
   },
 
   "compose_action": {
-    "default_title": "Proof of Work",
-    "default_label": "PoW",
+    "default_title": "ESF proof of work",
+    "default_label": "ESF",
     "default_popup": "src/compose/popup.html",
     "default_icon": "icons/esf.svg"
   },
 
   "message_display_action": {
-    "default_title": "Proof of Work",
-    "default_label": "PoW",
+    "default_title": "ESF proof of work",
+    "default_label": "ESF",
     "default_popup": "src/messageDisplay/popup.html",
     "default_icon": "icons/esf.svg"
   },

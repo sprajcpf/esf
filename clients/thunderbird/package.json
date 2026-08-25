@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "ESF — End-Spam-Forever: Proof-of-Work MailExtension for Thunderbird",
+  "description": "ESF \u2014 End-Spam-Forever: Proof-of-Work MailExtension for Thunderbird",
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
-    "vectors": "node tools/generate-vectors.mjs"
+    "vectors": "node tools/generate-vectors.mjs",
+    "whitepaper": "node tools/render-whitepaper.mjs && node tools/render-whitepaper-odt.mjs",
+    "profile": "node tools/make-test-profile.mjs"
   },
   "engines": {
     "node": ">=20"

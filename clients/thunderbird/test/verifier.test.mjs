@@ -1,249 +1,285 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { MAX_ACCEPTED_DIFFICULTY, Reason, VerificationStatus } from "../src/protocol/constants.js";
-import { parseProofHeader, serializeProof } from "../src/protocol/parser.js";
-import { generateProof, recipientId } from "../src/protocol/pow.js";
-import { replayKey, verifyMessageHeaders, verifyProof } from "../src/protocol/verifier.js";
+import {
+  MAX_DECLARED_DIFFICULTY,
+  MAX_STAMPS_PER_HEADER,
+  Reason,
+  Signal,
+  StampState
+} from "../src/protocol/constants.js";
+import { parseStamp, serializeStamp, serializeStampList } from "../src/protocol/parser.js";
+import { generateStamp, recipientToken, senderToken } from "../src/protocol/stamp.js";
+import { stampId, verifyMessageStamps, verifyStamp } from "../src/protocol/verifier.js";
 
-const NOW = Date.UTC(2026, 7, 25, 12, 0, 0);
+const NOW = 1787651400_000;
 const DAY = 24 * 60 * 60 * 1000;
+const FROM = "sender@example.org";
+const ME = "alice@example.com";
 const MESSAGE_ID = "msg-1@host.example";
 
 function context(overrides = {}) {
   return {
-    localAddresses: ["alice@example.com"],
-    messageId: MESSAGE_ID,
+    localMailboxes: [ME],
+    from: FROM,
     now: NOW,
     maxAgeMs: 7 * DAY,
-    minBits: 1,
+    minDifficulty: 1,
     ...overrides
   };
 }
 
-async function makeProof(overrides = {}) {
-  const { proof } = await generateProof({
-    recipient: overrides.recipient || "alice@example.com",
-    bits: overrides.bits ?? 8,
-    messageId: overrides.messageId ?? MESSAGE_ID,
-    now: overrides.now ?? NOW - 60_000,
-    hideRecipient: overrides.hideRecipient === true
+async function makeStamp(overrides = {}) {
+  const { stamp } = await generateStamp({
+    from: overrides.from || FROM,
+    recipient: overrides.recipient || ME,
+    messageId: overrides.messageId || MESSAGE_ID,
+    difficulty: overrides.difficulty ?? 8,
+    now: overrides.now ?? NOW - 60_000
   });
-  return { ...proof, ...(overrides.patch || {}) };
+  return { ...stamp, ...(overrides.patch || {}) };
 }
 
-test("a freshly generated proof verifies", async () => {
-  const proof = await makeProof();
-  const result = await verifyProof(proof, context());
-  assert.equal(result.status, VerificationStatus.VALID);
+/* ---------------------------------------------------------------- happy path */
+
+test("a fresh stamp verifies as strong and green", async () => {
+  const result = await verifyStamp(await makeStamp(), context());
+  assert.equal(result.state, StampState.STRONG);
+  assert.equal(result.signal, Signal.GREEN);
   assert.equal(result.reason, Reason.OK);
-  assert.equal(result.matchedRecipient, "alice@example.com");
-  assert.ok(result.leadingZeroBits >= proof.bits);
+  assert.equal(result.matchedRecipient, ME);
+  assert.equal(result.senderBound, true);
+  assert.ok(result.leadingZeroBits >= result.difficulty);
   assert.equal(typeof result.verificationMs, "number");
 });
 
-test("a proof for a hidden (Bcc) recipient verifies against the receiving address", async () => {
-  const proof = await makeProof({ recipient: "bcc@example.com", hideRecipient: true });
-  assert.equal(proof.recipient, null);
-  const result = await verifyProof(proof, context({ localAddresses: ["other@x.y", "bcc@example.com"] }));
-  assert.equal(result.status, VerificationStatus.VALID);
-  assert.equal(result.matchedRecipient, "bcc@example.com");
+test("verification is one hash, so it stays cheap whatever is declared", async () => {
+  const strong = await makeStamp({ difficulty: 20 });
+  const result = await verifyStamp(strong, context());
+  assert.equal(result.state, StampState.STRONG);
+  assert.ok(result.verificationMs < 100, `verification took ${result.verificationMs} ms`);
 });
 
-test("a hidden recipient binding does not verify for anybody else", async () => {
-  const proof = await makeProof({ recipient: "bcc@example.com", hideRecipient: true });
-  const result = await verifyProof(proof, context({ localAddresses: ["alice@example.com"] }));
-  assert.equal(result.status, VerificationStatus.INVALID);
-  assert.equal(result.reason, Reason.RECIPIENT_MISMATCH);
+/* ---------------------------------------------------------------- weak vs strong (whitepaper 11.1) */
+
+test("a valid stamp below the receiver policy is weak and yellow, not invalid", async () => {
+  const result = await verifyStamp(await makeStamp({ difficulty: 8 }), context({ minDifficulty: 18 }));
+  assert.equal(result.state, StampState.WEAK);
+  assert.equal(result.signal, Signal.YELLOW);
+  assert.equal(result.reason, Reason.BELOW_POLICY);
+  assert.equal(result.requiredDifficulty, 18);
+  assert.ok(result.leadingZeroBits >= 8, "the work really was done");
 });
 
-test("recipient substitution is rejected", async () => {
-  const proof = await makeProof();
-  const substituted = { ...proof, recipient: "mallory@example.com" };
-  const result = await verifyProof(substituted, context({ localAddresses: ["mallory@example.com"] }));
-  assert.equal(result.status, VerificationStatus.INVALID);
-  assert.equal(result.reason, Reason.INSUFFICIENT_WORK, "the digest is bound to the original recipient");
+/* ---------------------------------------------------------------- unsupported profiles */
+
+test("a registered but unimplemented profile is unsupported, not invalid", async () => {
+  const stamp = { ...await makeStamp(), algorithm: "argon2id" };
+  const result = await verifyStamp(stamp, context());
+  assert.equal(result.state, StampState.UNSUPPORTED);
+  assert.equal(result.signal, Signal.YELLOW);
+  assert.equal(result.reason, Reason.UNSUPPORTED_ALGORITHM);
+  assert.match(result.detail, /argon2id/);
 });
 
-test("a proof addressed to someone else is not accepted for us", async () => {
-  const proof = await makeProof({ recipient: "carol@example.net" });
-  const result = await verifyProof(proof, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
-  assert.equal(result.reason, Reason.RECIPIENT_MISMATCH);
+test("an unknown profile is also unsupported and costs no work", async () => {
+  const result = await verifyStamp({ ...await makeStamp(), algorithm: "sha3-512" }, context());
+  assert.equal(result.state, StampState.UNSUPPORTED);
+  assert.ok(result.verificationMs < 50);
 });
 
-test("a tampered nonce is rejected", async () => {
-  const proof = await makeProof({ patch: { nonce: "999999999" } });
-  const result = await verifyProof(proof, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
+test("a newer protocol version is unsupported rather than invalid", async () => {
+  const result = await verifyStamp({ ...await makeStamp(), version: 2 }, context());
+  assert.equal(result.state, StampState.UNSUPPORTED);
+  assert.equal(result.reason, Reason.UNSUPPORTED_VERSION);
+});
+
+/* ---------------------------------------------------------------- forged and tampered stamps */
+
+test("a tampered nonce is invalid", async () => {
+  const result = await verifyStamp(await makeStamp({ patch: { nonce: "deadbeef" } }), context());
+  assert.equal(result.state, StampState.INVALID);
+  assert.equal(result.signal, Signal.RED);
   assert.equal(result.reason, Reason.INSUFFICIENT_WORK);
 });
 
-test("a tampered salt is rejected", async () => {
-  const proof = await makeProof();
-  const result = await verifyProof({ ...proof, salt: "00".repeat(16) }, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
+test("a tampered salt breaks the recipient binding", async () => {
+  const result = await verifyStamp({ ...await makeStamp(), salt: "00".repeat(16) }, context());
+  assert.equal(result.reason, Reason.WRONG_RECIPIENT);
+});
+
+test("a tampered timestamp is invalid", async () => {
+  const stamp = await makeStamp();
+  const result = await verifyStamp({ ...stamp, timestamp: stamp.timestamp - 30 }, context());
   assert.equal(result.reason, Reason.INSUFFICIENT_WORK);
 });
 
-test("a tampered timestamp is rejected", async () => {
-  const proof = await makeProof();
-  const result = await verifyProof({ ...proof, timestamp: "20260825T110000Z" }, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
+test("claiming more work than was done is invalid", async () => {
+  const result = await verifyStamp({ ...await makeStamp({ difficulty: 8 }), difficulty: 26 }, context());
   assert.equal(result.reason, Reason.INSUFFICIENT_WORK);
 });
 
-test("claiming more work than was done is rejected", async () => {
-  const proof = await makeProof({ bits: 8 });
-  const result = await verifyProof({ ...proof, bits: 26 }, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
-  assert.equal(result.reason, Reason.INSUFFICIENT_WORK);
-});
-
-test("an absurd declared difficulty is refused outright, without doing the work", async () => {
-  const proof = await makeProof();
-  const result = await verifyProof({ ...proof, bits: 250 }, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
+test("an absurd declared difficulty is refused before any work", async () => {
+  const result = await verifyStamp({ ...await makeStamp(), difficulty: 250 }, context());
+  assert.equal(result.state, StampState.INVALID);
   assert.equal(result.reason, Reason.DIFFICULTY_OUT_OF_RANGE);
   assert.ok(result.verificationMs < 50, "must not spend time on an attacker-declared difficulty");
 });
 
-test("the maximum accepted difficulty cannot be raised past the hard cap", async () => {
-  const proof = await makeProof();
-  const result = await verifyProof({ ...proof, bits: MAX_ACCEPTED_DIFFICULTY + 1 },
-    context({ maxBits: 999 }));
+test("the hard difficulty cap cannot be raised by local policy", async () => {
+  const result = await verifyStamp({ ...await makeStamp(), difficulty: MAX_DECLARED_DIFFICULTY + 1 },
+    context({ maxDifficulty: 999 }));
   assert.equal(result.reason, Reason.DIFFICULTY_OUT_OF_RANGE);
 });
 
-test("a proof below the configured minimum difficulty is not counted as valid", async () => {
-  const proof = await makeProof({ bits: 8 });
-  const result = await verifyProof(proof, context({ minBits: 18 }));
-  assert.equal(result.status, VerificationStatus.INVALID);
-  assert.equal(result.reason, Reason.DIFFICULTY_TOO_LOW);
+test("difficulty 0 is refused", async () => {
+  const result = await verifyStamp({ ...await makeStamp(), difficulty: 0 }, context());
+  assert.equal(result.reason, Reason.DIFFICULTY_OUT_OF_RANGE);
 });
 
-test("stale proofs are rejected", async () => {
-  const proof = await makeProof({ now: NOW - 8 * DAY });
-  const result = await verifyProof(proof, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
-  assert.equal(result.reason, Reason.EXPIRED);
+/* ---------------------------------------------------------------- freshness */
+
+test("a stale stamp is rejected", async () => {
+  const result = await verifyStamp(await makeStamp({ now: NOW - 8 * DAY }), context());
+  assert.equal(result.state, StampState.INVALID);
+  assert.equal(result.reason, Reason.STALE);
 });
 
-test("the acceptance window is configurable", async () => {
-  const proof = await makeProof({ now: NOW - 8 * DAY });
-  const result = await verifyProof(proof, context({ maxAgeMs: 30 * DAY }));
-  assert.equal(result.status, VerificationStatus.VALID);
+test("the acceptance window is policy", async () => {
+  const stamp = await makeStamp({ now: NOW - 8 * DAY });
+  assert.equal((await verifyStamp(stamp, context({ maxAgeMs: 30 * DAY }))).state, StampState.STRONG);
 });
 
-test("proofs from the future are rejected beyond the clock skew tolerance", async () => {
-  const nearFuture = await makeProof({ now: NOW + 30 * 60 * 1000 });
-  assert.equal((await verifyProof(nearFuture, context())).status, VerificationStatus.VALID);
-
-  const farFuture = await makeProof({ now: NOW + 3 * 60 * 60 * 1000 });
-  const result = await verifyProof(farFuture, context());
-  assert.equal(result.status, VerificationStatus.INVALID);
-  assert.equal(result.reason, Reason.FUTURE_TIMESTAMP);
+test("moderate clock skew is tolerated, a far future stamp is not", async () => {
+  assert.equal((await verifyStamp(await makeStamp({ now: NOW + 30 * 60 * 1000 }), context())).state,
+    StampState.STRONG);
+  const far = await verifyStamp(await makeStamp({ now: NOW + 3 * 60 * 60 * 1000 }), context());
+  assert.equal(far.reason, Reason.FUTURE_TIMESTAMP);
 });
 
-test("unsupported versions and algorithms are rejected", async () => {
-  const proof = await makeProof();
-  assert.equal((await verifyProof({ ...proof, version: 2 }, context())).reason, Reason.UNSUPPORTED_VERSION);
-  assert.equal((await verifyProof({ ...proof, algorithm: "md5" }, context())).reason, Reason.UNSUPPORTED_ALGORITHM);
+/* ---------------------------------------------------------------- bindings */
+
+test("a stamp minted for another recipient does not verify for us", async () => {
+  const result = await verifyStamp(await makeStamp({ recipient: "carol@example.net" }), context());
+  assert.equal(result.reason, Reason.WRONG_RECIPIENT);
 });
 
-test("a self-declared message id verifies, and can be pinned to the carrying message on demand", async () => {
-  // The proof carries the id it was computed for (`mid`). By default that is accepted, because Thunderbird assigns
-  // the real Message-ID only after the send hook has run - see README, "Limitations".
-  const proof = await makeProof({ messageId: "other@host.example" });
-  const lenient = await verifyProof(proof, context());
-  assert.equal(lenient.status, VerificationStatus.VALID);
-
-  const strict = await verifyProof(proof, context({ requireMessageIdMatch: true }));
-  assert.equal(strict.reason, Reason.MESSAGE_ID_MISMATCH);
+test("a stamp verifies for whichever of our mailboxes it was minted for", async () => {
+  const stamp = await makeStamp({ recipient: "second@example.net" });
+  const result = await verifyStamp(stamp, context({ localMailboxes: [ME, "second@example.net"] }));
+  assert.equal(result.state, StampState.STRONG);
+  assert.equal(result.matchedRecipient, "second@example.net");
 });
 
-test("dropping the mid field breaks the proof, so the binding cannot be stripped", async () => {
-  const proof = await makeProof({ messageId: "other@host.example" });
-  const stripped = await verifyProof({ ...proof, messageId: "" }, context());
-  assert.equal(stripped.status, VerificationStatus.INVALID);
-  assert.equal(stripped.reason, Reason.INSUFFICIENT_WORK);
+test("recipient matching is case sensitive in the local-part, insensitive in the domain", async () => {
+  const stamp = await makeStamp({ recipient: "Alice@Example.COM" });
+  assert.equal((await verifyStamp(stamp, context({ localMailboxes: ["Alice@example.com"] }))).state,
+    StampState.STRONG);
+  assert.equal((await verifyStamp(stamp, context({ localMailboxes: ["alice@example.com"] }))).reason,
+    Reason.WRONG_RECIPIENT);
 });
 
-test("verifyMessageHeaders reports a missing proof for messages without the header", async () => {
-  const outcome = await verifyMessageHeaders([], context());
-  assert.equal(outcome.status, VerificationStatus.MISSING);
-  assert.equal(outcome.reason, Reason.NO_HEADER);
+test("a stamp moved to a message from a different sender is caught when sender binding is required", async () => {
+  const stamp = await makeStamp();
+  const lenient = await verifyStamp(stamp, context({ from: "attacker@evil.example", requireSenderBinding: false }));
+  assert.equal(lenient.state, StampState.STRONG);
+  assert.equal(lenient.senderBound, false, "the mismatch is still reported");
+
+  const strict = await verifyStamp(stamp, context({ from: "attacker@evil.example" }));
+  assert.equal(strict.reason, Reason.SENDER_MISMATCH);
+});
+
+test("the message binding is checked when the carrier Message-ID is supplied", async () => {
+  const stamp = await makeStamp({ messageId: "other@host.example" });
+  const result = await verifyStamp(stamp, context({ messageId: MESSAGE_ID }));
+  assert.equal(result.reason, Reason.MESSAGE_MISMATCH);
+
+  const matching = await verifyStamp(await makeStamp(), context({ messageId: MESSAGE_ID }));
+  assert.equal(matching.state, StampState.STRONG);
+  assert.equal(matching.messageBound, true);
+});
+
+test("tokens cannot be swapped between fields", async () => {
+  const stamp = await makeStamp();
+  const swapped = { ...stamp, sid: stamp.rid, rid: stamp.sid };
+  const result = await verifyStamp(swapped, context());
+  assert.equal(result.reason, Reason.WRONG_RECIPIENT);
+});
+
+/* ---------------------------------------------------------------- message level */
+
+test("a message without a stamp is missing and red, and that is not an error", async () => {
+  const outcome = await verifyMessageStamps([], context());
+  assert.equal(outcome.state, StampState.MISSING);
+  assert.equal(outcome.signal, Signal.RED);
+  assert.equal(outcome.reason, Reason.NO_STAMP);
   assert.equal(outcome.best, null);
 });
 
-test("verifyMessageHeaders finds our proof among proofs for other recipients", async () => {
-  const headers = [];
-  for (const recipient of ["bob@example.org", "alice@example.com", "carol@example.net"]) {
-    headers.push(serializeProof(await makeProof({ recipient, bits: 8 })));
+test("our stamp is found among stamps for other recipients", async () => {
+  const stamps = [];
+  for (const recipient of ["bob@example.org", ME, "carol@example.net"]) {
+    stamps.push(await makeStamp({ recipient }));
   }
-  const outcome = await verifyMessageHeaders(headers, context());
-  assert.equal(outcome.status, VerificationStatus.VALID);
-  assert.equal(outcome.best.matchedRecipient, "alice@example.com");
+  const outcome = await verifyMessageStamps([serializeStampList(stamps)], context());
+  assert.equal(outcome.state, StampState.STRONG);
+  assert.equal(outcome.best.matchedRecipient, ME);
   assert.equal(outcome.results.length, 3);
 });
 
-test("verifyMessageHeaders keeps the strongest valid proof", async () => {
-  const weak = serializeProof(await makeProof({ bits: 4 }));
-  const strong = serializeProof(await makeProof({ bits: 12 }));
-  const outcome = await verifyMessageHeaders([weak, strong], context());
-  assert.equal(outcome.status, VerificationStatus.VALID);
-  assert.equal(outcome.best.bits, 12);
+test("repeated header fields work as well as one list", async () => {
+  const mine = serializeStamp(await makeStamp());
+  const other = serializeStamp(await makeStamp({ recipient: "bob@example.org" }));
+  const outcome = await verifyMessageStamps([other, mine], context());
+  assert.equal(outcome.state, StampState.STRONG);
 });
 
-test("verifyMessageHeaders caps the number of headers it processes", async () => {
-  const junk = new Array(500).fill("v=1; alg=sha256; bits=22; ts=20260825T103800Z; rcpt=a@b.c; nonce=1; " +
-    "salt=8f2c1d4ea7b3906512c0de77a15be340");
+test("a strong stamp wins over a weak one", async () => {
+  const weak = await makeStamp({ difficulty: 4 });
+  const strong = await makeStamp({ difficulty: 20 });
+  const outcome = await verifyMessageStamps([serializeStampList([weak, strong])], context({ minDifficulty: 18 }));
+  assert.equal(outcome.state, StampState.STRONG);
+  assert.equal(outcome.best.difficulty, 20);
+});
+
+test("a malformed entry does not hide a good stamp", async () => {
+  const good = serializeStamp(await makeStamp());
+  const outcome = await verifyMessageStamps([`totally broken, ${good}`], context());
+  assert.equal(outcome.state, StampState.STRONG);
+});
+
+test("header bombing is bounded and reported", async () => {
+  const junk = `v=1; alg=sha256; d=22; t=1787651400; sid=${"A".repeat(43)}; rid=${"B".repeat(43)}; ` +
+    `mid=${"C".repeat(43)}; salt=8f2c1d4ea7b3906512c0de77a15be340; nonce=1`;
   const started = Date.now();
-  const outcome = await verifyMessageHeaders(junk, context());
-  assert.equal(outcome.status, VerificationStatus.INVALID);
-  assert.equal(outcome.results.length, 8);
-  assert.equal(outcome.skipped, 492);
+  const outcome = await verifyMessageStamps(new Array(500).fill(junk), context());
+  assert.equal(outcome.state, StampState.INVALID);
+  assert.ok(outcome.results.length <= MAX_STAMPS_PER_HEADER);
+  assert.ok(outcome.skipped > 400, "the surplus is reported, not silently ignored");
   assert.ok(Date.now() - started < 1000);
 });
 
-test("a malformed header among valid ones does not hide the valid proof", async () => {
-  const good = serializeProof(await makeProof({ bits: 8 }));
-  const outcome = await verifyMessageHeaders(["totally broken", good], context());
-  assert.equal(outcome.status, VerificationStatus.VALID);
+/* ---------------------------------------------------------------- replay identity (whitepaper 6.8) */
+
+test("the replay identifier is the digest of the canonical stamp", async () => {
+  const stamp = await makeStamp();
+  const key = await stampId(stamp);
+  assert.match(key, /^[0-9a-f]{64}$/);
+  assert.equal(key, await stampId({ ...stamp }), "same stamp, same identifier");
+  assert.notEqual(key, await stampId(await makeStamp()), "a different stamp gets a different identifier");
 });
 
-test("replayKey binds a proof to one recipient and one digest", async () => {
-  const proof = await makeProof();
-  const result = await verifyProof(proof, context());
-  const key = replayKey(result);
-  assert.equal(key, `alice@example.com|${result.hash}`);
-
-  const other = await verifyProof(await makeProof(), context());
-  assert.notEqual(replayKey(other), key, "a second proof must produce a different ledger key");
-});
-
-test("a replayed header is detectable through the ledger key", async () => {
-  const header = serializeProof(await makeProof());
-  const first = await verifyMessageHeaders([header], context());
-  const second = await verifyMessageHeaders([header], context());
-  assert.equal(first.status, VerificationStatus.VALID);
-  assert.equal(second.status, VerificationStatus.VALID);
-  assert.equal(replayKey(first.best), replayKey(second.best), "the ledger recognises the identical proof");
-});
-
-test("the recipient hash cannot be reused with a different salt", async () => {
-  const proof = await makeProof({ recipient: "bcc@example.com", hideRecipient: true });
-  const rehashed = { ...proof, salt: "11".repeat(16) };
-  const result = await verifyProof(rehashed, context({ localAddresses: ["bcc@example.com"] }));
-  assert.equal(result.reason, Reason.RECIPIENT_MISMATCH);
-  assert.notEqual(await recipientId("11".repeat(16), "bcc@example.com"), proof.recipientHash);
-});
-
-test("parse-then-verify works on the wire format", async () => {
-  const header = serializeProof(await makeProof({ bits: 12 }));
-  const parsed = parseProofHeader(header);
+test("the replay identifier survives re-parsing the wire form", async () => {
+  const stamp = await makeStamp();
+  const parsed = parseStamp(serializeStamp(stamp));
   assert.equal(parsed.ok, true);
-  const result = await verifyProof(parsed.proof, context());
-  assert.equal(result.status, VerificationStatus.VALID);
-  assert.equal(result.bits, 12);
+  assert.equal(await stampId(parsed.stamp), await stampId(stamp));
+});
+
+/* ---------------------------------------------------------------- token helpers used by the verifier */
+
+test("verification recomputes the very tokens the sender derived", async () => {
+  const stamp = await makeStamp();
+  assert.equal(stamp.rid, await recipientToken(ME, stamp.salt));
+  assert.equal(stamp.sid, await senderToken(FROM));
 });

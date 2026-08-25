@@ -1,6 +1,6 @@
 /**
  * Tests for the glue code that is still testable without Thunderbird: recipient flattening, the raw header fallback
- * parser, the difficulty policy and the settings normaliser.
+ * parser, difficulty policy, receiver policy, settings normalisation and the traffic-light mapping.
  */
 
 import test from "node:test";
@@ -8,92 +8,114 @@ import assert from "node:assert/strict";
 
 import { flattenRecipients } from "../src/background/composeSigner.js";
 import { parseRawHeaders } from "../src/background/verificationService.js";
-import { PeerClass, resolveIncomingMinBits, resolveOutgoingBits } from "../src/protocol/policy.js";
+import { PeerClass, receiverPolicy, resolveOutgoingDifficulty } from "../src/protocol/policy.js";
 import { DEFAULTS, normalizeSettings, resolveWorkerCount } from "../src/utils/settings.js";
+import { SIGNAL_BY_STATE, Signal, StampState } from "../src/protocol/constants.js";
 
-test("flattenRecipients normalises, deduplicates and counts unresolvable entries", () => {
+test("flattenRecipients canonicalises, deduplicates and counts unresolvable entries", () => {
   const result = flattenRecipients([
-    "Alice <alice@example.com>",
-    "alice@EXAMPLE.com",
+    "Alice <Alice@Example.COM>",
+    "Alice@example.com",
     { id: "abc", type: "contact" },
     "garbage",
     "bob@example.org"
   ]);
-  assert.deepEqual(result.addresses, ["alice@example.com", "bob@example.org"]);
+  assert.deepEqual(result.mailboxes, ["Alice@example.com", "bob@example.org"]);
   assert.equal(result.unresolved, 2);
 });
 
 test("flattenRecipients accepts the single-value and empty forms of ComposeRecipientList", () => {
-  assert.deepEqual(flattenRecipients("a@b.c").addresses, ["a@b.c"]);
-  assert.deepEqual(flattenRecipients(undefined).addresses, []);
-  assert.deepEqual(flattenRecipients(null).addresses, []);
+  assert.deepEqual(flattenRecipients("a@b.cc").mailboxes, ["a@b.cc"]);
+  assert.deepEqual(flattenRecipients(undefined).mailboxes, []);
+  assert.deepEqual(flattenRecipients(null).mailboxes, []);
 });
 
-test("parseRawHeaders extracts folded proof headers and the message id", () => {
+test("parseRawHeaders extracts folded stamp fields and the message id", () => {
   const raw = [
     "Return-Path: <sender@example.org>",
     "Message-ID: <abc.123@host.example>",
-    "X-Email-PoW: v=1; alg=sha256; bits=22; ts=20260825T103800Z;",
-    "\trcpt=alice@example.com; nonce=4711; salt=8f2c1d4ea7b3906512c0de77a15be340",
-    "X-Email-PoW: v=1; alg=sha256; bits=22; ts=20260825T103800Z; rcpt=bob@example.org; nonce=1; salt=aabb",
+    "X-ESF-Stamp: v=1; alg=sha256; d=22; t=1787651400;",
+    "\tsid=AAA; rid=BBB; mid=CCC; salt=8f2c1d4ea7b3906512c0de77a15be340; nonce=1",
     "Subject: hello",
     "",
-    "body X-Email-PoW: not a header"
+    "body X-ESF-Stamp: not a header"
   ].join("\r\n");
 
-  const [values, messageId] = parseRawHeaders(raw, "x-email-pow");
-  assert.equal(values.length, 2);
-  assert.match(values[0], /rcpt=alice@example\.com; nonce=4711/);
+  const [values, messageId] = parseRawHeaders(raw);
+  assert.equal(values.length, 1);
+  assert.match(values[0], /sid=AAA; rid=BBB/);
   assert.equal(messageId, "<abc.123@host.example>");
 });
 
+test("parseRawHeaders accepts the standards-track field name as well", () => {
+  const raw = "Message-ID: <x@y>\r\nESF-Stamp: v=1\r\nX-ESF-Stamp: v=1\r\n\r\nbody";
+  const [values] = parseRawHeaders(raw);
+  assert.equal(values.length, 2);
+});
+
 test("parseRawHeaders ignores the body and tolerates LF-only line endings", () => {
-  const raw = "Message-ID: <x@y>\nX-Email-PoW: v=1\n\nX-Email-PoW: injected";
-  const [values] = parseRawHeaders(raw, "x-email-pow");
+  const [values] = parseRawHeaders("Message-ID: <x@y>\nX-ESF-Stamp: v=1\n\nX-ESF-Stamp: injected");
   assert.deepEqual(values, ["v=1"]);
 });
 
-test("the static policy returns the configured difficulty for everyone", () => {
-  const settings = normalizeSettings({ outgoingBits: 24 });
-  const resolved = resolveOutgoingBits({ recipient: "a@b.c", recipientCount: 1, settings });
-  assert.deepEqual(resolved, { bits: 24, peerClass: PeerClass.UNKNOWN });
+test("the static policy charges every unknown peer the configured baseline", () => {
+  const settings = normalizeSettings({ outgoingDifficulty: 24 });
+  assert.deepEqual(resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings }),
+    { difficulty: 24, peerClass: PeerClass.UNKNOWN });
 });
 
 test("difficulty 0 disables generation", () => {
-  const settings = normalizeSettings({ outgoingBits: 0 });
-  assert.equal(resolveOutgoingBits({ recipient: "a@b.c", recipientCount: 1, settings }).bits, 0);
+  const settings = normalizeSettings({ outgoingDifficulty: 0 });
+  assert.equal(resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings }).difficulty, 0);
 });
 
-test("the adaptive policy applies the per-class rule", () => {
-  const settings = normalizeSettings({ outgoingBits: 22, adaptiveDifficulty: true });
-  const resolved = resolveOutgoingBits({ recipient: "a@b.c", recipientCount: 1, settings });
-  assert.equal(resolved.bits, 22, "unknown peers get the base difficulty");
+test("the trust-aware policy applies the per-class rule", () => {
+  const settings = normalizeSettings({ outgoingDifficulty: 22, trustAwareDifficulty: true });
+  assert.equal(resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings }).difficulty, 22,
+    "unknown peers get the baseline");
 });
 
-test("incoming minimum difficulty falls back to 1 when unset", () => {
-  assert.equal(resolveIncomingMinBits({}), 1);
-  assert.equal(resolveIncomingMinBits({ minIncomingBits: 20 }), 20);
+test("receiver policy exposes a per-profile minimum, because difficulties are not comparable", () => {
+  const policy = receiverPolicy(normalizeSettings({ minIncomingDifficulty: 20 }));
+  assert.equal(policy.minDifficulty("sha256"), 20);
+  assert.deepEqual(policy.acceptedAlgorithms, ["sha256"]);
+});
+
+test("the traffic light follows the whitepaper mapping", () => {
+  assert.equal(SIGNAL_BY_STATE[StampState.STRONG], Signal.GREEN);
+  assert.equal(SIGNAL_BY_STATE[StampState.WEAK], Signal.YELLOW);
+  assert.equal(SIGNAL_BY_STATE[StampState.UNSUPPORTED], Signal.YELLOW);
+  assert.equal(SIGNAL_BY_STATE[StampState.MISSING], Signal.RED);
+  assert.equal(SIGNAL_BY_STATE[StampState.INVALID], Signal.RED);
 });
 
 test("settings are clamped so a corrupt profile cannot break the send path", () => {
   const settings = normalizeSettings({
-    outgoingBits: 99,
+    outgoingDifficulty: 99,
     maxComputeSeconds: -5,
-    maxProofAgeDays: 100000,
-    minIncomingBits: 999,
+    maxStampAgeDays: 100000,
+    minIncomingDifficulty: 999,
     maxWorkers: -3,
     bccMode: "leak-everything",
     onTimeout: "explode",
-    markMissingAsJunk: "yes please"
+    junkOnRed: "yes please"
   });
-  assert.equal(settings.outgoingBits, DEFAULTS.outgoingBits);
+  assert.equal(settings.outgoingDifficulty, DEFAULTS.outgoingDifficulty);
   assert.equal(settings.maxComputeSeconds, 1);
-  assert.equal(settings.maxProofAgeDays, 365);
-  assert.equal(settings.minIncomingBits, 30);
+  assert.equal(settings.maxStampAgeDays, 365);
+  assert.equal(settings.minIncomingDifficulty, 30);
   assert.equal(settings.maxWorkers, 0);
-  assert.equal(settings.bccMode, "hashed");
+  assert.equal(settings.bccMode, "omit");
   assert.equal(settings.onTimeout, DEFAULTS.onTimeout);
-  assert.equal(settings.markMissingAsJunk, false, "only a real boolean enables junk marking");
+  assert.equal(settings.junkOnRed, false, "only a real boolean enables junk marking");
+});
+
+test("Bcc defaults to omitting the stamp rather than exposing a token", () => {
+  assert.equal(DEFAULTS.bccMode, "omit");
+});
+
+test("junk marking is off by default, so a missing stamp is never treated as abuse", () => {
+  assert.equal(DEFAULTS.junkOnRed, false);
 });
 
 test("worker count leaves a core to Thunderbird and honours the override", () => {

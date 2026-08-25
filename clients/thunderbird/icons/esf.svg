@@ -1,6 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
-  <path d="M16 2 5 6v10c0 6.3 4.4 11.9 11 14 6.6-2.1 11-7.7 11-14V6L16 2z"
-        fill="none" stroke="context-stroke, currentColor" stroke-width="2" stroke-linejoin="round"/>
-  <path d="M11 12h10M10 17h10M14 9l-1.5 11M19 9l-1.5 11"
-        fill="none" stroke="context-stroke, currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  <defs>
+    <linearGradient id="esf" x1="4" y1="28" x2="28" y2="4" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1f6fd0"/>
+      <stop offset="1" stop-color="#122f6e"/>
+    </linearGradient>
+  </defs>
+  <!-- Shield with an envelope chevron: the ESF mark, simplified for 16 px rendering. -->
+  <path d="M16 2.5 4.5 6.6v9.7c0 6.4 4.7 12 11.5 13.2 6.8-1.2 11.5-6.8 11.5-13.2V6.6L16 2.5z"
+        fill="none" stroke="url(#esf)" stroke-width="2.6" stroke-linejoin="round"/>
+  <path d="M7.6 10.4 16 17.2l8.4-6.8" fill="none" stroke="url(#esf)" stroke-width="2.6"
+        stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

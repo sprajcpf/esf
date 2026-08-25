@@ -1,29 +1,40 @@
 /**
- * Difficulty policy. Version 1 ships a static policy; the shape below is the extension point for adaptive rules
- * (address book lookups, reputation, bulk detection) without touching the send path.
+ * Difficulty and receiver policy (whitepaper 7.1 "difficulty is policy, not a universal constant" and 7.3
+ * trust-aware difficulty).
+ *
+ * v1 of this client ships the static policy: every unknown peer gets the configured baseline. The shape below is the
+ * extension point for trust-aware rules (address book, previous replies, DKIM-authenticated organisations,
+ * reputation) without touching the send path.
  */
 
-/** How a peer is classified. Only UNKNOWN is produced by the static policy. */
+import { ALGORITHM_SHA256 } from "./constants.js";
+
+/** Peer classes of whitepaper 7.3. */
 export const PeerClass = {
   KNOWN_CONTACT: "known-contact",
-  TRUSTED: "trusted",
+  REPLIED_TO: "replied-to",
+  TRUSTED_ORGANISATION: "trusted-organisation",
   UNKNOWN: "unknown",
   SUSPICIOUS: "suspicious",
-  BULK: "bulk"
-};
-
-/** Difficulty offsets/overrides per class, expressed relative to the configured base difficulty. */
-export const ADAPTIVE_OUTGOING = {
-  [PeerClass.KNOWN_CONTACT]: { mode: "absolute", bits: 0 },
-  [PeerClass.TRUSTED]: { mode: "absolute", bits: 0 },
-  [PeerClass.UNKNOWN]: { mode: "base", delta: 0 },
-  [PeerClass.SUSPICIOUS]: { mode: "base", delta: 2 },
-  [PeerClass.BULK]: { mode: "base", delta: 2 }
+  CONSENTED_BULK: "consented-bulk"
 };
 
 /**
- * Classifies an outgoing recipient. The static policy treats everyone as unknown, which yields the configured base
- * difficulty. Replace/extend this function to add address-book or reputation driven behaviour.
+ * Outgoing rules per class. `absolute` pins a value (0 = no work), `relative` shifts the configured baseline.
+ * Whitepaper 7.3: do not charge every message equally, and do not waste computation on consented streams.
+ */
+export const OUTGOING_RULES = {
+  [PeerClass.KNOWN_CONTACT]: { mode: "absolute", difficulty: 0 },
+  [PeerClass.REPLIED_TO]: { mode: "absolute", difficulty: 0 },
+  [PeerClass.TRUSTED_ORGANISATION]: { mode: "absolute", difficulty: 0 },
+  [PeerClass.UNKNOWN]: { mode: "relative", delta: 0 },
+  [PeerClass.SUSPICIOUS]: { mode: "relative", delta: 2 },
+  [PeerClass.CONSENTED_BULK]: { mode: "absolute", difficulty: 0 }
+};
+
+/**
+ * Classifies an outgoing recipient. The static policy treats everyone as unknown, which yields the configured
+ * baseline difficulty. Replace or extend this to add trust-aware behaviour.
  *
  * @param {{recipient: string, recipientCount: number, settings: object}} _input
  * @returns {string} a PeerClass value
@@ -39,30 +50,38 @@ export function classifyRecipient(_input) {
  * @param {string} params.recipient
  * @param {number} params.recipientCount
  * @param {object} params.settings
- * @returns {{bits: number, peerClass: string}}
+ * @returns {{difficulty: number, peerClass: string}}
  */
-export function resolveOutgoingBits({ recipient, recipientCount, settings }) {
-  const base = Number(settings.outgoingBits) || 0;
-  if (base <= 0) {
-    return { bits: 0, peerClass: PeerClass.UNKNOWN };
+export function resolveOutgoingDifficulty({ recipient, recipientCount, settings }) {
+  const baseline = Number(settings.outgoingDifficulty) || 0;
+  if (baseline <= 0) {
+    return { difficulty: 0, peerClass: PeerClass.UNKNOWN };
   }
-  if (!settings.adaptiveDifficulty) {
-    return { bits: base, peerClass: PeerClass.UNKNOWN };
+  if (!settings.trustAwareDifficulty) {
+    return { difficulty: baseline, peerClass: PeerClass.UNKNOWN };
   }
   const peerClass = classifyRecipient({ recipient, recipientCount, settings });
-  const rule = ADAPTIVE_OUTGOING[peerClass] || { mode: "base", delta: 0 };
-  const bits = rule.mode === "absolute" ? rule.bits : Math.max(0, base + rule.delta);
-  return { bits, peerClass };
+  const rule = OUTGOING_RULES[peerClass] || { mode: "relative", delta: 0 };
+  const difficulty = rule.mode === "absolute" ? rule.difficulty : Math.max(0, baseline + rule.delta);
+  return { difficulty, peerClass };
 }
 
 /**
- * Minimum difficulty an incoming proof must carry to be counted as valid. Kept separate from the outgoing setting so
- * that a user may send 24 bit proofs while still accepting 18 bit ones.
+ * Receiver policy for verification: which profiles are accepted and what counts as strong.
+ *
+ * Difficulty numbers are profile specific and MUST NOT be compared across work functions (whitepaper 7.2), hence the
+ * per-profile minimum.
  *
  * @param {object} settings
- * @returns {number}
+ * @returns {{minDifficulty: (algorithm: string) => number, acceptedAlgorithms: string[]}}
  */
-export function resolveIncomingMinBits(settings) {
-  const configured = Number(settings.minIncomingBits);
-  return Number.isInteger(configured) && configured > 0 ? configured : 1;
+export function receiverPolicy(settings) {
+  const configured = Number(settings.minIncomingDifficulty);
+  const sha256Minimum = Number.isInteger(configured) && configured > 0 ? configured : 1;
+  return {
+    acceptedAlgorithms: [ALGORITHM_SHA256],
+    minDifficulty(algorithm) {
+      return algorithm === ALGORITHM_SHA256 ? sha256Minimum : 1;
+    }
+  };
 }

@@ -1,4 +1,4 @@
-/** Compose-window popup: live state of the proof computation and the "taking too long" decision. */
+/** Compose-window popup: live state of the ESF stamp computation and the "taking too long" decision. */
 
 const statusEl = document.getElementById("status");
 const statusText = document.getElementById("statusText");
@@ -10,19 +10,19 @@ const runActions = document.getElementById("runActions");
 let composeTabId = null;
 
 const PHASE_TEXT = {
-  idle: "Ready — proof is generated when you send",
-  computing: "Calculating Proof of Work…",
+  idle: "Ready — a stamp is minted when you send",
+  computing: "Calculating proof of work…",
   asking: "Still calculating — what should happen?",
-  done: "Proof of Work attached",
-  skipped: "Sent without Proof of Work",
+  done: "ESF stamp attached",
+  skipped: "Sent without an ESF stamp",
   cancelled: "Send cancelled"
 };
 
 const PHASE_CLASS = {
-  done: "valid",
-  skipped: "missing",
-  cancelled: "invalid",
-  asking: "missing"
+  done: "green",
+  skipped: "yellow",
+  cancelled: "red",
+  asking: "yellow"
 };
 
 async function resolveTabId() {
@@ -43,8 +43,8 @@ function render(state, settings) {
   statusText.textContent = PHASE_TEXT[state.phase] || state.phase;
 
   detailsEl.textContent = "";
-  const bits = state.bits || (settings && settings.outgoingBits) || 0;
-  row("Difficulty", bits > 0 ? `${bits} bits` : "disabled");
+  const difficulty = state.difficulty || (settings && settings.outgoingDifficulty) || 0;
+  row("Difficulty", difficulty > 0 ? `${difficulty} bits` : "disabled");
   if (state.recipientCount) {
     row("Recipients", `${state.completed || 0} of ${state.recipientCount} done`);
   }
@@ -56,6 +56,12 @@ function render(state, settings) {
   }
   if (state.elapsedMs) {
     row("Duration", `${(state.elapsedMs / 1000).toFixed(1)} s`);
+  }
+  if (state.skippedBcc) {
+    row("Bcc without a stamp", String(state.skippedBcc));
+  }
+  if (state.unresolvedRecipients) {
+    row("Unresolved recipients", String(state.unresolvedRecipients));
   }
   if (state.reason) {
     row("Reason", state.reason);

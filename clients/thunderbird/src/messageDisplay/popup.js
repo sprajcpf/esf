@@ -1,30 +1,45 @@
-/** Message-display popup: the detailed verification report behind the badge. */
+/**
+ * Message-display popup: the ESF traffic light plus an optional details view.
+ *
+ * Whitepaper 4.2 / 11: the primary experience is the colour. Algorithm, difficulty and timestamps are diagnostics
+ * behind a disclosure, never a prerequisite for understanding the result.
+ */
 
 const statusEl = document.getElementById("status");
 const statusText = document.getElementById("statusText");
 const hintEl = document.getElementById("hint");
 const detailsEl = document.getElementById("details");
+const disclosure = document.getElementById("disclosure");
 
 const HEADLINE = {
-  valid: "✓ Proof of Work verified",
-  invalid: "⚠ Invalid Proof of Work",
-  missing: "No Proof of Work"
+  green: "Proof of work verified",
+  yellow: "Weak proof of work",
+  red: "No accepted proof of work"
+};
+
+const STATE_TEXT = {
+  strong: "This sender spent measurable computing time for your address.",
+  weak: "A valid proof is present, but below what you ask for.",
+  unsupported: "The proof uses a work profile this add-on does not implement.",
+  missing: "This message carries no ESF stamp. Almost no mail does today — this is not a sign of spam.",
+  invalid: "A stamp is present but was not accepted."
 };
 
 const REASON_TEXT = {
   ok: "",
-  "no-header": "This message carries no X-Email-PoW header. Most mail does not — this is not a sign of spam.",
-  malformed: "The header could not be parsed.",
-  "unsupported-version": "The proof uses a protocol version this add-on does not know.",
-  "unsupported-algorithm": "The proof uses an unsupported hash algorithm.",
+  "no-stamp": "",
+  malformed: "The stamp could not be parsed.",
+  "unsupported-version": "The stamp uses a newer ESF protocol version.",
+  "unsupported-algorithm": "Unsupported work profile — no work was performed to check it.",
   "difficulty-out-of-range": "The declared difficulty is outside the accepted range.",
-  "difficulty-too-low": "The proof is weaker than your configured minimum.",
-  expired: "The proof is older than your acceptance window.",
-  "future-timestamp": "The proof is timestamped in the future.",
-  "recipient-mismatch": "The proof is not bound to any of your addresses.",
-  "message-id-mismatch": "The proof references a different message.",
-  "insufficient-work": "The hash does not have the claimed number of leading zero bits.",
-  replay: "This exact proof was already seen on another message (replay)."
+  "below-policy": "Real work was done, but less than your configured minimum.",
+  stale: "The stamp is older than your acceptance window.",
+  "future-timestamp": "The stamp is dated in the future.",
+  "wrong-recipient": "The stamp is not bound to any of your addresses.",
+  "sender-mismatch": "The stamp was not minted for this sender.",
+  "message-mismatch": "The stamp references a different message.",
+  "insufficient-work": "The digest does not have the claimed number of leading zero bits.",
+  replay: "This exact stamp was already seen on another message (replay)."
 };
 
 function row(term, value) {
@@ -35,53 +50,46 @@ function row(term, value) {
   detailsEl.append(dt, dd);
 }
 
-function formatTimestamp(compact) {
-  const match = /^(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z$/.exec(compact || "");
-  if (!match) {
-    return compact || "—";
-  }
-  const iso = `${match[1]}-${match[2]}-${match[3]}T${match[4]}:${match[5]}:${match[6]}Z`;
-  return new Date(iso).toLocaleString();
-}
-
 function render(result) {
-  const status = result.status || "missing";
-  statusEl.className = `status ${status}`;
-  const bits = result.best && result.best.bits;
-  statusText.textContent = status === "valid" ? `${HEADLINE.valid} — ${bits}-bit PoW` : HEADLINE[status];
-  hintEl.textContent = REASON_TEXT[result.reason] || "";
+  const signal = result.signal || "red";
+  statusEl.className = `status ${signal}`;
+  const best = result.best;
+  const difficulty = best && best.difficulty;
+  statusText.textContent = signal === "green" && difficulty
+    ? `${HEADLINE.green} — ${difficulty} bits`
+    : HEADLINE[signal];
+  hintEl.textContent = REASON_TEXT[result.reason] || STATE_TEXT[result.state] || "";
 
   detailsEl.textContent = "";
-  const best = result.best;
+  row("ESF state", `${result.state}${result.reason && result.reason !== "ok" ? ` (${result.reason})` : ""}`);
   if (best && best.algorithm) {
-    row("Algorithm", best.algorithm === "sha256" ? "SHA-256" : best.algorithm);
+    row("Work profile", best.algorithm === "sha256" ? "SHA-256" : best.algorithm);
   }
-  if (best && best.bits) {
-    row("Difficulty", `${best.bits} bits (found ${best.leadingZeroBits} leading zero bits)`);
+  if (best && best.difficulty) {
+    const found = best.leadingZeroBits !== undefined ? `, ${best.leadingZeroBits} found` : "";
+    row("Difficulty", `${best.difficulty} bits claimed${found}`);
   }
-  if (best && best.timestamp) {
-    row("Timestamp", formatTimestamp(best.timestamp));
+  if (best && best.requiredDifficulty) {
+    row("Your minimum", `${best.requiredDifficulty} bits`);
+  }
+  if (best && best.timestampMs) {
+    row("Stamped", new Date(best.timestampMs).toLocaleString());
   }
   if (best && best.matchedRecipient) {
-    row("Recipient", best.matchedRecipient);
+    row("Bound to", best.matchedRecipient);
+  }
+  if (best && best.senderBound !== null && best.senderBound !== undefined) {
+    row("Sender binding", best.senderBound ? "matches From" : "does not match From");
   }
   if (best && typeof best.verificationMs === "number") {
     row("Verification time", `${best.verificationMs} ms`);
   }
-  if (best && best.hash) {
-    const dt = document.createElement("dt");
-    dt.textContent = "Digest";
-    const dd = document.createElement("dd");
-    dd.className = "mono";
-    dd.textContent = `${best.hash.slice(0, 32)}…`;
-    detailsEl.append(dt, dd);
+  if (best && best.detail) {
+    row("Detail", String(best.detail));
   }
-  row("Headers found", String(result.headerCount ?? 0));
-  if (result.skippedHeaders > 0) {
-    row("Headers ignored", String(result.skippedHeaders));
-  }
-  if (!detailsEl.children.length) {
-    detailsEl.classList.add("hidden");
+  row("Stamps examined", `${result.stampCount ?? 0} in ${result.headerCount ?? 0} header field(s)`);
+  if (result.skipped > 0) {
+    row("Ignored", `${result.skipped} beyond the parser limits`);
   }
 }
 
@@ -89,13 +97,16 @@ async function load(force) {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   const tabId = tabs.length > 0 ? tabs[0].id : null;
   const result = await browser.runtime.sendMessage({ type: "esf:getVerification", tabId, force });
-  render(result || { status: "missing", reason: "no-header" });
+  render(result && result.state ? result : { state: "missing", signal: "red", reason: "no-stamp" });
 }
 
 document.getElementById("recheck").addEventListener("click", () => load(true));
 document.getElementById("options").addEventListener("click", () => {
   browser.runtime.openOptionsPage();
   window.close();
+});
+disclosure.addEventListener("toggle", () => {
+  disclosure.querySelector("summary").textContent = disclosure.open ? "Hide details" : "Details";
 });
 
 load(false);

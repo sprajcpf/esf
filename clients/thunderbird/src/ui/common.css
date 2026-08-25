@@ -57,12 +57,29 @@ h1 {
   flex: 0 0 auto;
 }
 
-.status.valid { color: var(--esf-valid); }
-.status.valid .dot { background: var(--esf-valid); }
-.status.invalid { color: var(--esf-invalid); }
-.status.invalid .dot { background: var(--esf-invalid); }
-.status.missing { color: var(--esf-missing); }
-.status.missing .dot { background: var(--esf-missing); }
+.status.green { color: var(--esf-valid); }
+.status.green .dot { background: var(--esf-valid); }
+.status.red { color: var(--esf-invalid); }
+.status.red .dot { background: var(--esf-invalid); }
+.status.yellow { color: var(--esf-missing); }
+.status.yellow .dot { background: var(--esf-missing); }
+
+/* The traffic light is the primary signal, so give the dot a little more presence. */
+.status .dot {
+  width: 12px;
+  height: 12px;
+}
+
+details summary {
+  cursor: pointer;
+  color: var(--esf-muted);
+  margin-bottom: 6px;
+}
+
+.hint.small {
+  font-size: 11px;
+  margin-top: 8px;
+}
 
 .hint {
   color: var(--esf-muted);

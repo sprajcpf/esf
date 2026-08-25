@@ -1,16 +1,16 @@
 /**
- * Nonce search worker. One instance searches a single shard of the nonce space (startNonce + k * stride) so that N
+ * Nonce search worker. One instance searches a single shard of the nonce space (startCounter + k * stride) so N
  * workers never duplicate work. Runs as an ES module worker.
  *
  * Protocol:
- *   in  { type: "solve", jobId, base, bits, startNonce, stride, batchSize }
+ *   in  { type: "solve", jobId, workBase, difficulty, startCounter, stride, batchSize }
  *   in  { type: "cancel", jobId }
  *   out { type: "progress", jobId, hashes }
  *   out { type: "found", jobId, nonce, hash, hashes }
  *   out { type: "cancelled" | "error", jobId, ... }
  */
 
-import { searchNonce } from "../protocol/pow.js";
+import { searchNonce } from "../protocol/stamp.js";
 
 let cancelledJobs = new Set();
 
@@ -27,13 +27,13 @@ self.addEventListener("message", async event => {
     return;
   }
 
-  const { jobId, base, bits, startNonce, stride, batchSize } = message;
+  const { jobId, workBase, difficulty, startCounter, stride, batchSize } = message;
   cancelledJobs.delete(jobId);
   try {
     const result = await searchNonce({
-      base,
-      bits,
-      startNonce,
+      workBase,
+      difficulty,
+      startCounter,
       stride,
       batchSize,
       shouldStop: () => cancelledJobs.has(jobId),

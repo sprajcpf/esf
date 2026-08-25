@@ -1,29 +1,32 @@
-/** Settings storage. Thin, typed wrapper around browser.storage.local so every consumer sees the same defaults. */
+/** Settings storage. Thin wrapper around browser.storage.local so every consumer sees the same defaults. */
 
-import { DEFAULT_BITS, DEFAULT_MAX_AGE_DAYS, SELECTABLE_BITS } from "../protocol/constants.js";
+import { DEFAULT_DIFFICULTY, DEFAULT_MAX_AGE_DAYS, SELECTABLE_DIFFICULTY } from "../protocol/constants.js";
 
 const STORAGE_KEY = "settings";
 
 export const DEFAULTS = Object.freeze({
-  /** Master switch for outgoing proof generation. Verification of incoming mail stays active. */
+  /** Master switch for outgoing stamp generation. Verification of incoming mail stays active. */
   enabled: true,
-  /** Outgoing difficulty in leading zero bits; 0 disables generation. */
-  outgoingBits: DEFAULT_BITS,
-  /** Wall-clock budget for one send before the user is asked what to do. */
+  /** Baseline outgoing difficulty in leading zero bits; 0 disables generation. */
+  outgoingDifficulty: DEFAULT_DIFFICULTY,
+  /** Wall-clock budget per recipient before the user is asked what to do. */
   maxComputeSeconds: 5,
-  /** Incoming proofs older than this are rejected. */
-  maxProofAgeDays: DEFAULT_MAX_AGE_DAYS,
-  /** Lowest difficulty accepted from a sender. */
-  minIncomingBits: 18,
-  /** Show the verification badge on the message display button. */
+  /** Incoming stamps older than this are rejected (whitepaper 6.7 step 5). */
+  maxStampAgeDays: DEFAULT_MAX_AGE_DAYS,
+  /** Below this difficulty a valid stamp counts as weak/yellow rather than strong/green. */
+  minIncomingDifficulty: 18,
+  /** Show the traffic light on displayed messages. */
   showBadge: true,
-  /** Mark messages without a valid proof as junk. Off by default - a missing proof is not evidence of spam. */
-  markMissingAsJunk: false,
-  /** Reserved for the adaptive policy in src/protocol/policy.js. */
-  adaptiveDifficulty: false,
-  /** How Bcc recipients are handled: "hashed" (rid=) or "skip" (no proof for Bcc). */
-  bccMode: "hashed",
-  /** 0 means auto: min(2, hardwareConcurrency - 1). */
+  /**
+   * Feed a red result into Thunderbird's junk flag. Off by default: during adoption a missing stamp must not be
+   * treated as malicious (whitepaper 10.1, 11).
+   */
+  junkOnRed: false,
+  /** Reserved for the trust-aware policy in src/protocol/policy.js. */
+  trustAwareDifficulty: false,
+  /** Bcc handling: "omit" (whitepaper fallback) or "token" (include the salted rid). */
+  bccMode: "omit",
+  /** 0 means auto: min(2, cores - 1). Never consume every core by default (whitepaper 13). */
   maxWorkers: 0,
   /** What to do when the compute budget is exhausted: "ask" | "send-without" | "cancel". */
   onTimeout: "ask",
@@ -52,24 +55,25 @@ export async function saveSettings(patch) {
 /** Clamps and type-checks stored values, so a corrupted profile cannot produce nonsensical behaviour. */
 export function normalizeSettings(raw) {
   const input = raw && typeof raw === "object" ? raw : {};
-  const outgoingBits = Number(input.outgoingBits);
-  const settings = {
+  const outgoingDifficulty = Number(input.outgoingDifficulty);
+  return {
     ...DEFAULTS,
     ...input,
     enabled: input.enabled !== false,
-    outgoingBits: SELECTABLE_BITS.includes(outgoingBits) ? outgoingBits : DEFAULTS.outgoingBits,
+    outgoingDifficulty: SELECTABLE_DIFFICULTY.includes(outgoingDifficulty)
+      ? outgoingDifficulty
+      : DEFAULTS.outgoingDifficulty,
     maxComputeSeconds: clamp(Number(input.maxComputeSeconds), 1, 120, DEFAULTS.maxComputeSeconds),
-    maxProofAgeDays: clamp(Number(input.maxProofAgeDays), 1, 365, DEFAULTS.maxProofAgeDays),
-    minIncomingBits: clamp(Number(input.minIncomingBits), 1, 30, DEFAULTS.minIncomingBits),
+    maxStampAgeDays: clamp(Number(input.maxStampAgeDays), 1, 365, DEFAULTS.maxStampAgeDays),
+    minIncomingDifficulty: clamp(Number(input.minIncomingDifficulty), 1, 30, DEFAULTS.minIncomingDifficulty),
     maxWorkers: clamp(Number(input.maxWorkers), 0, 32, DEFAULTS.maxWorkers),
     showBadge: input.showBadge !== false,
-    markMissingAsJunk: input.markMissingAsJunk === true,
-    adaptiveDifficulty: input.adaptiveDifficulty === true,
+    junkOnRed: input.junkOnRed === true,
+    trustAwareDifficulty: input.trustAwareDifficulty === true,
     debugLogging: input.debugLogging === true,
-    bccMode: input.bccMode === "skip" ? "skip" : "hashed",
+    bccMode: input.bccMode === "token" ? "token" : "omit",
     onTimeout: ["ask", "send-without", "cancel"].includes(input.onTimeout) ? input.onTimeout : DEFAULTS.onTimeout
   };
-  return settings;
 }
 
 function clamp(value, min, max, fallback) {
@@ -80,7 +84,7 @@ function clamp(value, min, max, fallback) {
 }
 
 /**
- * Number of workers to use for a nonce search. Leaves at least one core to Thunderbird itself.
+ * Number of workers for a nonce search. Leaves at least one core to Thunderbird itself.
  *
  * @param {typeof DEFAULTS} settings
  * @param {number} [concurrency]

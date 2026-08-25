@@ -1,77 +1,115 @@
 /**
- * ESF Proof-of-Work protocol constants.
+ * ESF-Stamp protocol constants, following the ESF v1.0 Technical Whitepaper (section 6).
  *
- * This module (and everything else in src/protocol/) is deliberately free of any Thunderbird API usage so it can be
- * unit tested in plain Node.js and reused in a Web Worker.
+ * This module (and everything else in src/protocol/) is deliberately free of any Thunderbird API usage, so the same
+ * protocol core and test vectors can be reused by other clients, gateways and filters - which the whitepaper lists
+ * as a protocol requirement (section 4.1).
  */
 
-/** Protocol version emitted by this implementation. */
+/** Protocol version. Whitepaper 6.2: v MUST be 1. */
 export const PROTOCOL_VERSION = 1;
-
-/** Protocol versions this implementation is able to verify. */
 export const SUPPORTED_VERSIONS = new Set([1]);
 
-/** Canonical header name. Header names are compared case-insensitively (Thunderbird normalises to Http-Header-Case). */
-export const HEADER_NAME = "X-Email-PoW";
+/**
+ * Header field name.
+ *
+ * The standards-track target is `ESF-Stamp` (RFC 6648 deprecates X- names), but Thunderbird's compose customHeaders
+ * API only accepts X- prefixed names, so the prototype transports `X-ESF-Stamp` and accepts both on receipt.
+ * Whitepaper 6, 10.1 and appendix C.
+ */
+export const HEADER_NAME = "X-ESF-Stamp";
+export const STANDARD_HEADER_NAME = "ESF-Stamp";
+export const ACCEPTED_HEADER_NAMES = [HEADER_NAME.toLowerCase(), STANDARD_HEADER_NAME.toLowerCase()];
 
-export const DEFAULT_ALGORITHM = "sha256";
-export const SUPPORTED_ALGORITHMS = new Set(["sha256"]);
+/** Canonical work-input prefix (whitepaper 6.4). */
+export const WORK_PREFIX = "ESF1";
 
-/** Default outgoing difficulty in leading zero *bits* (not hex characters). */
-export const DEFAULT_BITS = 22;
+/** Work profiles. ESF v1 names sha256 and argon2id; only sha256 is implemented here. */
+export const ALGORITHM_SHA256 = "sha256";
+export const ALGORITHM_ARGON2ID = "argon2id";
+export const IMPLEMENTED_ALGORITHMS = new Set([ALGORITHM_SHA256]);
+/** Profiles that exist in ESF v1 but are not implemented locally: they map to "unsupported", never to invalid. */
+export const KNOWN_ALGORITHMS = new Set([ALGORITHM_SHA256, ALGORITHM_ARGON2ID]);
 
-/** Difficulties offered in the options UI. 0 means "disabled". */
-export const SELECTABLE_BITS = [0, 18, 20, 22, 24, 26];
+/** Difficulty offered in the options UI. 0 disables generation. */
+export const SELECTABLE_DIFFICULTY = [0, 18, 20, 22, 24, 26];
+export const DEFAULT_DIFFICULTY = 22;
 
 /**
- * Hard verification limits. A remote party declares `bits` itself, so verification must never scale its own work with
- * that value. Verification is always exactly one hash, but we still refuse absurd declarations outright.
+ * Verification bounds. Difficulty is declared by an untrusted sender, so the verifier applies its own bounds and
+ * never derives any amount of work from the declared value (whitepaper 6.7 step 4, 12).
  */
-export const MAX_ACCEPTED_DIFFICULTY = 30;
-export const MIN_ACCEPTED_DIFFICULTY = 1;
+export const MAX_DECLARED_DIFFICULTY = 30;
+export const MIN_DECLARED_DIFFICULTY = 1;
 
-/** Anti-DoS limits for parsing untrusted headers. */
-export const MAX_HEADER_LENGTH = 512;
-export const MAX_HEADERS_PER_MESSAGE = 8;
-export const MAX_FIELDS_PER_HEADER = 16;
-export const MAX_NONCE_DIGITS = 20;
+/** Anti-DoS limits applied before any cryptographic work (whitepaper 6.7 steps 1-2). */
+export const MAX_STAMP_LENGTH = 512;
+export const MAX_HEADER_TOTAL_LENGTH = 4096;
+export const MAX_STAMPS_PER_MESSAGE = 8;
+export const MAX_STAMPS_PER_HEADER = 16;
+export const MAX_FIELDS_PER_STAMP = 20;
+export const MAX_NONCE_HEX = 64;
 export const MIN_SALT_HEX = 16;
 export const MAX_SALT_HEX = 64;
-export const MAX_MESSAGE_ID_LENGTH = 200;
-export const MAX_RECIPIENT_LENGTH = 254;
+export const TOKEN_LENGTH = 43; // BASE64URL of a 32 byte digest, unpadded
 
-/** Tolerance for clocks running ahead of ours. */
+/** Freshness (whitepaper 6.7 step 5). */
 export const MAX_CLOCK_SKEW_MS = 60 * 60 * 1000;
-
-/** Default acceptance window for incoming proofs. */
 export const DEFAULT_MAX_AGE_DAYS = 7;
 
-/** Salt size in bytes. The salt makes precomputation against a known recipient useless. */
+/** Salt size in bytes. Whitepaper 6.2: at least 64 bits, 128 recommended. */
 export const SALT_BYTES = 16;
 
-/** Separator used when building the hash preimage, so fields cannot be shifted into each other. */
-export const FIELD_SEPARATOR = "|";
+/**
+ * Several stamps of one message travel in a single header value, comma separated.
+ *
+ * The whitepaper (6.9) describes one ESF-Stamp field per recipient. Thunderbird's customHeaders API keeps only one
+ * header per name, so the prototype folds them into one field; both forms are accepted on receipt.
+ */
+export const STAMP_SEPARATOR = ", ";
 
-/** Outcome of verifying a single message. */
-export const VerificationStatus = {
-  VALID: "valid",
+/**
+ * Internal validation states (whitepaper 11.1). The UI maps these onto the traffic light; automation needs the
+ * finer distinction, because a legacy sender without ESF is not the same as a forged stamp.
+ */
+export const StampState = {
+  STRONG: "strong",
+  WEAK: "weak",
+  MISSING: "missing",
   INVALID: "invalid",
-  MISSING: "missing"
+  UNSUPPORTED: "unsupported"
 };
 
-/** Machine-readable reasons, used for UI strings and tests. */
+/** Traffic light (whitepaper 11). */
+export const Signal = {
+  GREEN: "green",
+  YELLOW: "yellow",
+  RED: "red"
+};
+
+/** Whitepaper 11.1: strong -> green, weak/unsupported -> yellow, missing/invalid -> red. */
+export const SIGNAL_BY_STATE = {
+  [StampState.STRONG]: Signal.GREEN,
+  [StampState.WEAK]: Signal.YELLOW,
+  [StampState.UNSUPPORTED]: Signal.YELLOW,
+  [StampState.MISSING]: Signal.RED,
+  [StampState.INVALID]: Signal.RED
+};
+
+/** Machine-readable reasons behind a state. Used for UI strings, automation and tests. */
 export const Reason = {
   OK: "ok",
-  NO_HEADER: "no-header",
+  NO_STAMP: "no-stamp",
   MALFORMED: "malformed",
   UNSUPPORTED_VERSION: "unsupported-version",
   UNSUPPORTED_ALGORITHM: "unsupported-algorithm",
   DIFFICULTY_OUT_OF_RANGE: "difficulty-out-of-range",
-  DIFFICULTY_TOO_LOW: "difficulty-too-low",
-  EXPIRED: "expired",
+  BELOW_POLICY: "below-policy",
+  STALE: "stale",
   FUTURE_TIMESTAMP: "future-timestamp",
-  RECIPIENT_MISMATCH: "recipient-mismatch",
-  MESSAGE_ID_MISMATCH: "message-id-mismatch",
+  WRONG_RECIPIENT: "wrong-recipient",
+  SENDER_MISMATCH: "sender-mismatch",
+  MESSAGE_MISMATCH: "message-mismatch",
   INSUFFICIENT_WORK: "insufficient-work",
   REPLAY: "replay"
 };

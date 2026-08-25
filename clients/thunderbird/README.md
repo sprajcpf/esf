@@ -1,229 +1,207 @@
 # ESF for Thunderbird
 
-A Thunderbird MailExtension that attaches a **Proof-of-Work (PoW)** header to outgoing mail and verifies it on
-incoming mail.
+A Thunderbird MailExtension that mints an **ESF-Stamp** (proof of work) for every recipient of an outgoing message
+and verifies incoming stamps, showing the result as a green / yellow / red traffic light.
 
-> **Proof-of-Work does not authenticate the sender. It only proves that computational work was performed for the
-> email.**
+This is the *Phase 1 client prototype* of the ESF deployment roadmap: see
+[`docs/whitepaper.md`](../../docs/whitepaper.md) ([HTML](../../docs/whitepaper.html)) for the protocol it implements.
 
-It is not a replacement for DKIM, SPF, DMARC, S/MIME or OpenPGP, and it is not related to them. Those mechanisms
-answer *who sent this and was it modified*. PoW answers a different question: *did the sender spend real CPU time on
-this specific message and this specific recipient*. The two are complementary — a signed message can still be bulk
-spam, and a proof of work says nothing about identity.
+> **Proof of work is not authentication.** A valid stamp proves that measurable computing time was spent for a
+> specific recipient. It says nothing about *who* sent the message, whether the content is safe, or whether the mail
+> is wanted. ESF complements SPF, DKIM, DMARC, S/MIME and OpenPGP — it does not replace or resemble them.
 
 ---
 
-## Purpose
+## What it does
 
-Sending email is essentially free, which is what makes bulk spam viable. A proof of work makes each *recipient* of
-each *message* cost the sender a measurable amount of CPU time. For a person writing a handful of mails a day the
-cost is invisible; for someone sending a million messages it is not.
+- **Outgoing:** hooks `compose.onBeforeSend`, mints one stamp per recipient off the UI thread, and attaches them as
+  a single `X-ESF-Stamp` header field. Cancellable, with a configurable time budget.
+- **Incoming:** verifies every stamp of a displayed message against your own mailboxes and shows the traffic light
+  on the message-display button, with details behind a disclosure.
+- **Optional:** feed a red result into Thunderbird's junk flag (off by default).
 
-ESF gives you:
+## The stamp
 
-- one proof per recipient on outgoing mail, computed off the UI thread and cancellable,
-- verification of incoming proofs with a colour-coded badge and a detail panel,
-- an optional (default: off) junk-flag policy for mail without a valid proof.
-
-## Threat model
-
-What PoW in this design **does** protect against:
-
-| Attack | Mitigation |
-|---|---|
-| Bulk sending | Cost scales linearly with recipients × messages; the sender cannot amortise one proof over many. |
-| Reusing one proof for many recipients | The recipient address is part of the hash preimage. |
-| Precomputing proofs for a known address | A fresh 128-bit random salt per proof makes precomputation useless. |
-| Replaying a proof on a later message | Timestamp window (default 7 days) plus a local replay ledger keyed on recipient + digest. |
-| Claiming work that was not done | The verifier recomputes the digest and counts leading zero bits itself. |
-| Claiming an absurd difficulty | `bits` is capped at `MAX_ACCEPTED_DIFFICULTY = 30`; verification cost is one hash regardless. |
-| Header-based DoS on the verifier | Bounded header length (512 B), bounded field count, at most 8 proof headers per message, no backtracking regexes. |
-| Bcc address disclosure | Bcc recipients are bound by `rid=sha256(salt‖address)`, never by plaintext address. |
-
-What it explicitly does **not** protect against:
-
-- **Identity.** Anyone can compute a proof for any recipient. A valid proof means "someone burned CPU", not
-  "this is really Alice".
-- **A well-funded attacker.** 22 bits is roughly 4 million hashes: a few seconds on a laptop, milliseconds on rented
-  GPUs or an ASIC. PoW raises the floor for casual bulk senders; it does not stop a determined one.
-- **Message content.** The proof is not bound to the body (see *Limitations*), so a valid header proves work was done
-  for you as a recipient at a point in time, not that this exact text was the message that carried it.
-- **Missing proofs.** Practically no mail carries a proof today. A missing proof is a non-signal, and the UI says so.
-
-## How the proof works
-
-For every recipient the sender searches for a `nonce` such that
-
-```
-SHA256( version | recipient | timestamp | messageId | salt | nonce )
-```
-
-has at least `bits` **leading zero bits**. Fields are UTF-8, joined by `|` so no field can be shifted into its
-neighbour. `recipient` is lowercased with the display name and angle brackets removed, `timestamp` is the compact UTC
-form, `nonce` is a decimal integer.
-
-Difficulty is counted in *bits*, not in hexadecimal zero characters — `000f…` and `0008…` are both twelve zero
-bits, while `0018…` is only eleven.
-
-The result travels as a header:
-
-```
-X-Email-PoW: v=1; alg=sha256; bits=22; ts=20260825T103800Z; rcpt=user@example.com;
-             mid=6f1a…@esf.invalid; nonce=839274829374; salt=8f2c1d4ea7b3906512c0de77a15be340
+```text
+X-ESF-Stamp: v=1; alg=sha256; d=22; t=1787651400; sid=6wSaI0IDIy_r5NvA5k1QSCe8Y6m3j5K5qdYxjEzV_qg;
+             rid=tuCnpNbrXzseXq1aJFYyQDTUiObR8jfL87ZLdyS_PMg; mid=E6_RwO9y3KaChgtK5WN3Qye94zi9SeK3l9oIeD0fO9c;
+             salt=8f2c1d4ea7b3906512c0de77a15be340; nonce=19d82c
 ```
 
 | Field | Meaning |
 |---|---|
 | `v` | Protocol version (`1`) |
-| `alg` | Hash algorithm (`sha256`) |
-| `bits` | Declared difficulty in leading zero bits |
-| `ts` | UTC timestamp, `YYYYMMDDTHHMMSSZ` |
-| `rcpt` | Recipient address the proof is bound to (To/Cc) |
-| `rid` | *Instead of* `rcpt`: `sha256(salt‖address)` for Bcc recipients |
-| `mid` | Message identifier the proof was computed for |
-| `nonce` | The discovered nonce |
-| `salt` | 16 random bytes, hex, fresh per proof |
+| `alg` | Work profile — `sha256` here; ESF v1 also names `argon2id` |
+| `d` | Declared difficulty in leading zero **bits** |
+| `t` | Stamp creation time, Unix seconds UTC |
+| `sid` | `BASE64URL(SHA256("from:" ‖ canonical_from))` — sender binding |
+| `rid` | `BASE64URL(SHA256("to:" ‖ canonical_recipient ‖ 0x00 ‖ salt))` — recipient binding |
+| `mid` | `BASE64URL(SHA256("mid:" ‖ normalized_message_id))` — message binding |
+| `salt` | 128 random bits, hex, fresh per stamp |
+| `nonce` | The discovered nonce, hex |
 
-Multiple recipients produce multiple `X-Email-PoW` headers, one per recipient. A receiving client verifies the one
-bound to its own address and ignores the rest.
+The work function (whitepaper 6.4):
 
-**Cost asymmetry.** Generating a 22-bit proof takes ~4.2 million hashes. Verifying it takes exactly **one** hash,
-whatever the sender declares.
+```text
+work = UTF8("ESF1\n" + "alg=…\n" + [profile params] + "d=…\n" + "t=…\n" + "sid=…\n" + "rid=…\n" + "mid=…\n" +
+            "salt=…\n" + "nonce=…\n")
+valid iff leading_zero_bits(SHA256(work)) >= d
+```
 
-### Bcc
+Difficulty counts **bits**, not hexadecimal zeros: `000f…` and `0008…` are both twelve zero bits, `0018…` is only
+eleven. Generating a 22-bit stamp costs ~4.2 million hashes; verifying one costs exactly **one** hash, whatever the
+sender declares.
 
-A header is visible to *every* recipient of a message, so writing a Bcc address into `rcpt` would leak it. Bcc
-recipients are therefore bound by `rid=sha256(salt‖address)`:
+**No mailbox appears in clear text.** Recipients are bound by a salted token, so To, Cc and Bcc addresses are all
+equally unexposed. A receiver recomputes the token for its own mailboxes; a third party who already *suspects* an
+address can test that guess, which is why Bcc stamps are opt-in (see below).
 
-- the Bcc'd recipient can still verify — they know their own address,
-- other recipients see an opaque digest.
+## Traffic light
 
-The residual exposure is honest to state: someone who *already suspects* a specific address can test that guess
-against `rid`. The salt prevents precomputed tables, not targeted guessing. If that matters to you, set Bcc handling
-to *No proof for Bcc recipients* in the options.
+The colour is a policy result, not a cryptographic primitive (whitepaper 11):
+
+| Badge | Internal state | Meaning |
+|---|---|---|
+| green + bit count | `strong` | Valid stamp bound to one of your mailboxes, at or above your minimum |
+| yellow `~` | `weak` | Real work, but below your configured minimum |
+| yellow `~` | `unsupported` | A registered ESF profile this client does not implement (e.g. argon2id) — never executed |
+| red `–` | `missing` | No stamp. Almost no mail carries one today; this is **not** evidence of abuse |
+| red `!` | `invalid` | Malformed, stale, future-dated, wrong recipient, insufficient or replayed |
+
+`missing` and `invalid` share the red light but stay distinct internally, because automation must be able to tell a
+legacy sender from a forged stamp.
 
 ## Installation
 
-Requires **Thunderbird 128 or newer** (Manifest V3 support).
-
-Temporary install, for testing:
+Requires **Thunderbird 128 or newer** (Manifest V3). Verified on Thunderbird 153.
 
 1. Tools → Developer Tools → **Debug Add-ons**
 2. **Load Temporary Add-on…**
-3. select `manifest.json` in this repository
+3. select `manifest.json` in this directory
 
-Permanent install: zip the repository contents (with `manifest.json` at the **root** of the archive) and install the
-`.zip`/`.xpi` via Add-ons Manager → gear icon → *Install Add-on From File*. Unsigned add-ons need
-`xpinstall.signatures.required = false` in the Config Editor, or Thunderbird Daily/Beta.
+For a permanent install, zip the contents (with `manifest.json` at the archive root) and install the `.zip`/`.xpi`
+via Add-ons Manager → gear icon → *Install Add-on From File*. Unsigned add-ons need
+`xpinstall.signatures.required = false` in the Config Editor.
 
 ```bash
-zip -r esf.zip manifest.json icons src -x "*.md"
+zip -r esf-thunderbird.zip manifest.json icons src
 ```
 
-## Development setup
+## Development
 
 ```bash
-npm test          # 114 unit tests, no dependencies, no network
+npm test          # 148 unit tests, no dependencies, no network
 npm run vectors   # regenerate test/vectors.json
+npm run whitepaper  # re-render docs/whitepaper.html from docs/whitepaper.md
+npm run profile -- <dir>   # build a throwaway test profile with a seeded inbox
 ```
 
-The test suite runs on plain Node ≥ 20 with `node:test` — the entire `src/protocol/` tree is free of Thunderbird
-APIs by design, so the protocol can be tested without a mail client. `src/background/` and the UI need Thunderbird;
-the parts of them that are testable in isolation (recipient flattening, the raw-header fallback parser, settings
-normalisation, difficulty policy) are covered in `test/integration.test.mjs`.
+The whole of `src/protocol/` is free of Thunderbird APIs, so the protocol runs and is tested in plain Node ≥ 20 —
+the whitepaper asks for exactly that (4.1: one reusable core and one set of test vectors for every client, gateway
+and filter). `test/vectors.json` is the interoperability contract: mailboxes, salt, timestamp and the *first*
+solution nonce are all fixed, so any implementation that reproduces it agrees on canonicalisation, token derivation,
+the canonical work input and the difficulty measure.
 
-Debug logging: enable it in the add-on options, then watch Tools → Developer Tools → Error Console.
+Manual testing against a real Thunderbird:
+
+```bash
+npm run profile -- /tmp/esf-profile
+thunderbird -no-remote -profile /tmp/esf-profile   # click the Inbox once to index the seeded messages
+```
+
+The generated profile has a Local Folders account (`esf-test@example.com`) and thirteen messages covering every
+verification outcome, each subject naming the expected result.
 
 ## Architecture
 
 ```
 src/
   protocol/            no Thunderbird APIs, fully unit tested
-    constants.js       protocol constants and hard verification limits
+    constants.js       protocol constants, verification bounds, state/signal mapping
     sha256.js          synchronous SHA-256 for the search loop
-    hash.js            digests, hex, countLeadingZeroBits()
-    pow.js             canonicalisation, preimage, searchNonce(), generateProof()
-    parser.js          parseProofHeader() / serializeProof(), strict and bounded
-    verifier.js        verifyProof() / verifyMessageHeaders()
-    policy.js          difficulty policy, the hook for adaptive rules
-  workers/
-    powWorker.js       one nonce-space shard per worker
+    hash.js            digests, hex, base64url, countLeadingZeroBits()
+    stamp.js           canonicalisation, sid/rid/mid tokens, canonical work input, searchNonce()
+    parser.js          parseStamp/parseStampList, serializeStamp/serializeStampList
+    verifier.js        verifyStamp/verifyMessageStamps, stampId() for the replay cache
+    policy.js          difficulty policy (trust-aware hook) and receiver policy
+  workers/powWorker.js one nonce-space shard per worker
   background/
-    background.js      event wiring, badges, messaging
+    background.js      event wiring, traffic-light badge, messaging
     solver.js          worker pool, progress, cancellation
-    composeSigner.js   compose.onBeforeSend → headers
+    composeSigner.js   compose.onBeforeSend → stamps
     verificationService.js  header reading, verification cache, replay ledger
-  compose/             compose popup (progress, cancel, timeout decision)
-  messageDisplay/      verification detail popup
-  options/             settings page
-  ui/common.css        shared styling, light and dark
-  utils/               settings, logging
+  compose/             compose popup (progress, cancel, time-budget decision)
+  messageDisplay/      traffic light and details
+  options/             settings page with a local hash-rate benchmark
 ```
 
-Two deliberate structural choices:
+Two deliberate choices:
 
-- **The protocol does not know Thunderbird exists.** Everything mail-client specific lives outside
-  `src/protocol/`, which is what makes the interesting logic testable in a plain Node process.
-- **Difficulty is decided by a policy function**, not inline in the send path. `resolveOutgoingBits()` today returns
-  the configured value for everyone; adaptive rules (address book, reputation, bulk detection) plug in there
-  without touching `composeSigner.js`.
+- **The protocol does not know Thunderbird exists.** Everything client-specific lives outside `src/protocol/`.
+- **Difficulty is a policy function**, not inline in the send path. `resolveOutgoingDifficulty()` currently returns
+  the configured baseline for everyone; the trust-aware classes of whitepaper 7.3 (known contact, replied-to,
+  authenticated organisation, suspicious, consented bulk) plug into `classifyRecipient()` without touching the send
+  path.
 
 ### Why a hand-written SHA-256
 
 `crypto.subtle.digest()` is promise-based: one microtask per candidate caps the search at a few tens of thousands of
-hashes per second, which makes a 22-bit proof take minutes. The synchronous implementation in `sha256.js` reaches
-~270k hashes/s per worker on a mid-range laptop — a 22-bit proof in a few seconds across two workers. The test
-suite asserts digest-identical output against `crypto.subtle` for a range of inputs, and `crypto.subtle` remains in
-use for one-shot hashing.
+hashes per second, so a 22-bit stamp would take minutes. `sha256.js` reaches ~270k hashes/s per worker on a
+mid-range laptop — an 18-bit stamp in well under a second across two workers, measured inside Thunderbird. The test
+suite asserts digest-identical output against `crypto.subtle`, which remains in use for one-shot hashing.
 
 ## Thunderbird APIs used
 
 | API | Use | Notes |
 |---|---|---|
-| `compose.onBeforeSend` | Hook the send, compute proofs, inject headers | Async listeners are supported; returning `{details}` is equivalent to `setComposeDetails()` |
-| `ComposeDetails.customHeaders` | Add the `X-Email-PoW` headers | Thunderbird 100+; names must start with `X-` |
-| `composeAction` | Compose-window indicator, progress and the timeout dialog | `openPopup()` requires TB 113+ |
-| `messageDisplay.onMessageDisplayed` | Verify on open | |
-| `messageDisplayAction` | Badge (`setBadgeText`, `setBadgeBackgroundColor`) and detail popup | |
-| `messages.getHeaders` | Read the proof headers | TB 147+; falls back to `getFull()`, then `getRaw()` |
-| `messages.onNewMailReceived` | Optional junk policy on arrival | Needs `accountsRead` + `messagesRead` |
-| `messages.update` | Optional junk flag | Needs `messagesUpdate` |
-| `identities.list` | The addresses a proof may be bound to | Needs `accountsRead` |
+| `compose.onBeforeSend` | Hook the send, mint stamps, attach the field | Async listeners supported; returning `{details}` equals `setComposeDetails()` |
+| `ComposeDetails.customHeaders` | Attach `X-ESF-Stamp` | TB 100+; names must start with `X-` |
+| `composeAction` | Compose indicator, progress, time-budget dialog | `openPopup()` needs TB 113+ |
+| `messageDisplay.onMessagesDisplayed` | Verify on open | MV3 name; the singular form was removed |
+| `messageDisplayAction` | Traffic-light badge and details popup | |
+| `messages.getHeaders` | Read the stamp fields | TB 147+, falls back to `getFull()` then `getRaw()` |
+| `messages.onNewMailReceived` | Optional junk policy on arrival | needs `accountsRead` + `messagesRead` |
+| `messages.update` | Optional junk flag | needs `messagesUpdate` |
+| `identities.list` | The mailboxes a stamp may bind to | needs `accountsRead` |
 | `storage.local` | Settings and replay ledger | |
-| Web Workers (ES modules) | Nonce search off the UI thread | |
+| ES module Web Workers | Nonce search off the UI thread | |
 
-Manifest V3, `background.scripts` with `"type": "module"` (Thunderbird uses event pages, not service workers).
+Manifest V3 with a background **page** (`src/background/background.html`) loading an ES module. Thunderbird uses
+event pages rather than service workers, and `background.scripts` + `"type": "module"` did not start reliably on
+TB 153, so the page form is used deliberately.
 
-## API limitations we had to design around
+## API limitations designed around
 
-1. **The Message-ID is not available at compose time.** Thunderbird assigns it after `onBeforeSend` returns, and
-   `customHeaders` cannot set a non-`X-` header. The proof is therefore bound to a random `mid` we generate and
-   publish in the header. Consequence: the proof binds *recipient + time + salt + mid*, not the message body. The
-   replay ledger compensates by refusing a digest that reappears on a different message.
-2. **Headers are per-message, not per-recipient.** SMTP delivers the same header block to everybody, which is the
-   whole reason Bcc needs the hashed `rid` form.
-3. **Header names are normalised to `Http-Header-Case`.** `X-Email-PoW` may come back as `X-Email-Pow`; all
-   comparisons are case-insensitive.
-4. **Address-book contacts and mailing lists** arrive in `ComposeDetails` as `{id, type}` nodes, not addresses.
-   Expanding them would need the `addressBooks` permission; for now they are counted and skipped, and the popup
-   reports how many recipients got no proof.
-5. **No message-header row.** MailExtensions cannot add a row to the message header pane without a legacy
-   experiment, so the verification result lives on the `messageDisplayAction` button (badge + popup).
-6. **`onBeforeSend` is a user-input event.** A long computation delays the send; that is why the compute budget is
-   bounded and the user is asked what to do when it is exceeded.
+1. **`customHeaders` keeps only one field per name.** Setting three `X-ESF-Stamp` fields leaves only the last one
+   (measured on TB 153). The whitepaper's one-field-per-recipient form is therefore folded into a comma separated
+   list inside a single field; both forms are accepted on receipt.
+2. **The Message-ID does not exist yet at compose time.** Thunderbird assigns it after the send hook, and
+   `customHeaders` cannot set a non-`X-` field, so `mid` binds an identifier this client mints. The consequence is
+   honest: the stamp binds recipient + sender + time + salt + that identifier, not the message body. The receiver's
+   replay ledger (keyed on `SHA256(canonical stamp)`) closes the reuse gap.
+3. **Bcc cannot get its own message copy.** The whitepaper prefers one message copy per Bcc recipient, which a
+   MailExtension cannot create from the send hook. The default is therefore to omit Bcc stamps; the alternative
+   (include the salted token) is one setting away and documented as guessable by someone who already suspects the
+   address.
+4. **Header names normalise to `Http-Header-Case`** — `X-ESF-Stamp` comes back as `X-Esf-Stamp`, so all comparisons
+   are case-insensitive.
+5. **Address-book contacts and mailing lists** arrive as `{id, type}` nodes, not mailboxes. Expanding them needs the
+   `addressBooks` permission; for now they are counted and reported rather than silently skipped.
+6. **No message-header row.** MailExtensions cannot add one without a legacy experiment, so the result lives on the
+   `messageDisplayAction` button.
+7. **`onBeforeSend` is a user-input event.** A long computation delays the send, which is why the budget is bounded
+   and the user is asked when it is exceeded.
 
 ## Performance
 
-- The nonce search never runs on the UI thread. Workers are shards of the nonce space (`startNonce + k·stride`), so
-  no two workers try the same candidate.
-- Default worker count is `min(2, cores − 1)` — the machine stays usable while a proof is computed. Configurable.
-- Cancellation is `worker.terminate()`: CPU work stops in the same tick, not at the next checkpoint.
-- Cancelling the send, or the compute budget expiring, stops the search immediately.
-- Verification is one hash per header, at most 8 headers per message, with per-message result caching.
-- The options page has a *Measure my hash rate* button that turns your machine's throughput into expected durations
-  per difficulty setting.
+- The nonce search never runs on the UI thread. Workers take disjoint shards (`start + k·stride`).
+- Default worker count is `min(2, cores − 1)`: never every core (whitepaper 13).
+- Cancellation is `worker.terminate()` — CPU work stops in the same tick, not at the next checkpoint.
+- Verification is one hash per stamp, at most 8 header fields and 16 stamps per message, with per-message caching.
+- *Measure my hash rate* in the options turns local throughput into expected durations per difficulty.
 
-Rough guide (270k hashes/s per worker, 2 workers):
+Rough guide at ~270k hashes/s per worker with 2 workers — expected values, and the search is memoryless, so
+individual sends vary widely:
 
 | Difficulty | Expected hashes | Expected time |
 |---|---|---|
@@ -233,54 +211,19 @@ Rough guide (270k hashes/s per worker, 2 workers):
 | 24 bits | 16.8 M | ~31 s |
 | 26 bits | 67 M | ~2 min |
 
-Expected time is a *mean*: the search is memoryless, so individual sends vary widely.
+## Privacy
 
-## Privacy implications
+- A stamp publishes three opaque 43-character tokens, a random salt, a nonce, a difficulty and a timestamp. No
+  mailbox, no subject, no body, no machine identifier, no configuration.
+- The timestamp discloses when the stamp was minted, roughly when the mail was sent — which `Date` already says.
+- Everything stays local: no network requests, no service, no telemetry. Settings and the replay ledger (stamp
+  digest + a message key, capped and pruned to the freshness window) live in `storage.local` in your profile.
 
-- The header publishes a recipient address (for To/Cc — already visible in those headers), a timestamp with
-  second precision, a random salt, a nonce and a random message identifier. It contains no information about the
-  sender, the body, the machine or the add-on's configuration.
-- Bcc addresses never appear in plaintext; see *Bcc* above for the residual guessing exposure.
-- The timestamp discloses when the proof was computed, which is roughly when the mail was sent — the `Date` header
-  already says that.
-- Everything stays local. The add-on makes no network requests of its own, contacts no service, and sends no
-  telemetry. The replay ledger (recipient + digest, capped at 2000 entries) and your settings live in
-  `storage.local` in your profile.
+## Status
 
-## Settings
-
-| Setting | Default |
-|---|---|
-| Enable Proof of Work | on |
-| Outgoing difficulty | 22 bits |
-| Maximum computation time | 5 s |
-| When the time limit is reached | ask (continue / send without / cancel) |
-| Bcc recipients | hashed binding |
-| Worker threads | automatic, `min(2, cores − 1)` |
-| Accept proofs up to | 7 days |
-| Minimum accepted difficulty | 18 bits |
-| Show verification badge | on |
-| Mark messages without a valid proof as junk | **off** |
-| Debug logging | off |
-
-## Status indicators
-
-| Badge | Meaning |
-|---|---|
-| green, bit count | Valid proof, bound to one of your addresses |
-| yellow `-` | No proof — the normal case for almost all mail, and not a spam signal |
-| red `!` | A proof is present but does not hold up (wrong digest, expired, wrong recipient, replayed, malformed) |
-
-Clicking the button shows algorithm, difficulty, timestamp, recipient, verification time and the digest.
-
-## Roadmap
-
-Phases 1–3 of the design are implemented (protocol + workers + tests, outgoing integration, incoming verification
-and badge) and most of phase 4 (cancellation, budget dialog, worker configuration, benchmark). Not done yet:
-
-- adaptive difficulty driven by the address book (`policy.js` is ready for it, `classifyRecipient()` is a stub)
-- expanding address-book contacts and mailing lists into addresses
-- a localisation pass (`_locales/`) — all strings are currently inline English
+Implemented: SHA-256 profile, worker pool, compose integration, incoming verification, traffic light, replay cache,
+settings, test vectors. Not yet: the argon2id profile (recognised and reported as unsupported, never executed), DNS
+policy discovery, trust-aware classification, mailing-list/forwarding handling, and localisation (`_locales/`).
 
 ## Licence
 
