@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESF — End Spam Forever · Technical Whitepaper v1.0.1</title>
+<meta name="description" content="A Proof-of-Work framework for email abuse resistance. Pre-RFC technical whitepaper.">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1d21;
+  --muted: #5b6472;
+  --border: #e0e3e8;
+  --surface: #f6f7f9;
+  --brand: #1a4a9c;
+  --brand-dark: #122f6e;
+  --accent: #3f9c35;
+  --code-bg: #f2f4f7;
+  --max: 60rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b;
+    --fg: #e6e9ee;
+    --muted: #a3abb8;
+    --border: #2c3238;
+    --surface: #1b1f24;
+    --brand: #6ea8fe;
+    --brand-dark: #9dc4ff;
+    --accent: #6cc75f;
+    --code-bg: #1d2227;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.page { max-width: var(--max); margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+header.masthead { text-align: center; padding: 1rem 0 2rem; border-bottom: 1px solid var(--border); }
+header.masthead img { max-width: min(420px, 90%); height: auto; }
+header.masthead .title { font-size: 1.05rem; color: var(--muted); margin-top: 1.25rem; }
+header.masthead .meta { color: var(--muted); font-size: 0.9rem; margin-top: 0.4rem; }
+h1 { font-size: 2rem; line-height: 1.2; margin: 2.5rem 0 0.5rem; letter-spacing: -0.01em; }
+h2 {
+  font-size: 1.45rem;
+  margin: 3rem 0 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+  scroll-margin-top: 1rem;
+}
+h3 { font-size: 1.12rem; margin: 2rem 0 0.5rem; color: var(--brand); scroll-margin-top: 1rem; }
+h4 { font-size: 1rem; margin: 1.5rem 0 0.4rem; }
+p { margin: 0 0 1rem; }
+a { color: var(--brand); }
+ul, ol { margin: 0 0 1rem; padding-left: 1.4rem; }
+li { margin-bottom: 0.35rem; }
+blockquote {
+  margin: 1.5rem 0;
+  padding: 1rem 1.15rem;
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+}
+blockquote strong:first-child { color: var(--accent); }
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.12em 0.35em;
+  border-radius: 4px;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+}
+pre code { background: none; padding: 0; font-size: 0.85rem; line-height: 1.5; }
+.table-scroll { overflow-x: auto; margin: 1.25rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); }
+thead th { background: var(--surface); font-weight: 600; }
+tbody tr:hover { background: var(--surface); }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+nav.toc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.1rem 1.3rem;
+  margin: 2rem 0;
+}
+nav.toc h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  border: 0; margin: 0 0 0.6rem; padding: 0; }
+nav.toc ul { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 2rem; }
+nav.toc li { margin-bottom: 0.25rem; break-inside: avoid; }
+nav.toc li.level-3 { padding-left: 1rem; font-size: 0.92rem; }
+nav.toc a { text-decoration: none; }
+nav.toc a:hover { text-decoration: underline; }
+footer.colophon { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 0.85rem; }
+@media print {
+  :root { --bg: #fff; --fg: #000; --surface: #f4f4f4; --code-bg: #f4f4f4; --border: #ccc; }
+  nav.toc { break-after: page; }
+  h2 { break-after: avoid; }
+  pre, table, blockquote { break-inside: avoid; }
+}
+@media (max-width: 640px) {
+  nav.toc ul { columns: 1; }
+  h1 { font-size: 1.6rem; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="masthead">
+  <img src="../assets/logo.png" alt="ESF — End Spam Forever">
+  <div class="title">A Proof-of-Work Framework for Email Abuse Resistance</div>
+  <div class="meta">Technical Whitepaper · Version 1.0.1 (Pre-RFC) · 25 August 2026</div>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ul>
+<li class="level-2"><a href="#a-proof-of-work-framework-for-email-abuse-resistance">A Proof-of-Work Framework for Email Abuse Resistance</a></li>
+<li class="level-2"><a href="#abstract">Abstract</a></li>
+<li class="level-2"><a href="#document-map">Document map</a></li>
+<li class="level-2"><a href="#1-the-problem-esf-is-intended-to-solve">1. The problem ESF is intended to solve</a></li>
+<li class="level-2"><a href="#2-prior-art">2. Prior art</a></li>
+<li class="level-3"><a href="#2-1-resource-based-security-softwar-and-bitcoin">2.1 Resource-based security: SOFTWAR and Bitcoin</a></li>
+<li class="level-2"><a href="#3-relationship-to-existing-email-security">3. Relationship to existing email security</a></li>
+<li class="level-2"><a href="#4-design-principles-goals-and-non-goals">4. Design principles, goals and non-goals</a></li>
+<li class="level-3"><a href="#4-1-integrability-first">4.1 Integrability First</a></li>
+<li class="level-3"><a href="#4-2-usability-first">4.2 Usability First</a></li>
+<li class="level-3"><a href="#4-3-protocol-and-security-goals">4.3 Protocol and security goals</a></li>
+<li class="level-3"><a href="#4-4-non-goals">4.4 Non-goals</a></li>
+<li class="level-2"><a href="#5-architecture">5. Architecture</a></li>
+<li class="level-3"><a href="#5-1-mode-a-esf-stamp">5.1 Mode A: ESF-Stamp</a></li>
+<li class="level-3"><a href="#5-2-mode-b-esf-smtp">5.2 Mode B: ESF-SMTP</a></li>
+<li class="level-2"><a href="#6-esf-stamp-protocol-proposal-v0-1">6. ESF-Stamp protocol proposal (v0.1)</a></li>
+<li class="level-3"><a href="#6-1-example-header">6.1 Example header</a></li>
+<li class="level-3"><a href="#6-2-fields">6.2 Fields</a></li>
+<li class="level-3"><a href="#6-3-canonical-identifiers">6.3 Canonical identifiers</a></li>
+<li class="level-3"><a href="#6-4-work-input-and-target">6.4 Work input and target</a></li>
+<li class="level-3"><a href="#6-5-algorithm-agility-and-initial-work-profiles">6.5 Algorithm agility and initial work profiles</a></li>
+<li class="level-3"><a href="#6-6-generation">6.6 Generation</a></li>
+<li class="level-3"><a href="#6-7-verification">6.7 Verification</a></li>
+<li class="level-3"><a href="#6-8-replay-resistance">6.8 Replay resistance</a></li>
+<li class="level-3"><a href="#6-9-multiple-recipients-and-bcc">6.9 Multiple recipients and BCC</a></li>
+<li class="level-2"><a href="#7-difficulty-and-economic-model">7. Difficulty and economic model</a></li>
+<li class="level-3"><a href="#7-1-difficulty-is-policy-not-a-universal-constant">7.1 Difficulty is policy, not a universal constant</a></li>
+<li class="level-3"><a href="#7-2-initial-profiles-sha-256-and-argon2id">7.2 Initial profiles: SHA-256 and Argon2id</a></li>
+<li class="level-3"><a href="#7-3-trust-aware-difficulty">7.3 Trust-aware difficulty</a></li>
+<li class="level-2"><a href="#8-receiver-policy-discovery">8. Receiver policy discovery</a></li>
+<li class="level-2"><a href="#9-future-esf-smtp-profile">9. Future ESF-SMTP profile</a></li>
+<li class="level-2"><a href="#10-integration-profiles">10. Integration profiles</a></li>
+<li class="level-3"><a href="#10-1-mail-user-agents">10.1 Mail user agents</a></li>
+<li class="level-3"><a href="#10-2-gateways-and-server-filters">10.2 Gateways and server filters</a></li>
+<li class="level-3"><a href="#10-3-webmail-and-hosted-providers">10.3 Webmail and hosted providers</a></li>
+<li class="level-3"><a href="#10-4-mailing-lists-and-forwarding">10.4 Mailing lists and forwarding</a></li>
+<li class="level-2"><a href="#11-receiver-scoring-and-ux-semantics">11. Receiver scoring and UX semantics</a></li>
+<li class="level-3"><a href="#11-1-advanced-internal-validation-states">11.1 Advanced/internal validation states</a></li>
+<li class="level-2"><a href="#12-threat-model-and-security-analysis">12. Threat model and security analysis</a></li>
+<li class="level-3"><a href="#12-1-what-esf-can-realistically-reduce">12.1 What ESF can realistically reduce</a></li>
+<li class="level-2"><a href="#13-operational-accessibility-and-environmental-considerations">13. Operational, accessibility and environmental considerations</a></li>
+<li class="level-2"><a href="#14-deployment-roadmap">14. Deployment roadmap</a></li>
+<li class="level-2"><a href="#15-rfc-and-iana-standardization-path">15. RFC and IANA standardization path</a></li>
+<li class="level-2"><a href="#16-open-design-questions-before-a-standards-track-draft">16. Open design questions before a standards-track draft</a></li>
+<li class="level-2"><a href="#17-conclusion">17. Conclusion</a></li>
+<li class="level-2"><a href="#appendix-a-draft-esf-stamp-grammar">Appendix A - Draft ESF-Stamp grammar</a></li>
+<li class="level-2"><a href="#appendix-b-reference-verification-pseudocode">Appendix B - Reference verification pseudocode</a></li>
+<li class="level-2"><a href="#appendix-c-reference-thunderbird-implementation-profile">Appendix C - Reference Thunderbird implementation profile</a></li>
+<li class="level-2"><a href="#appendix-d-implementation-learnings-from-the-reference-clients">Appendix D - Implementation learnings from the reference clients</a></li>
+<li class="level-3"><a href="#d-1-header-naming-and-transport">D.1 Header naming and transport</a></li>
+<li class="level-3"><a href="#d-2-one-field-many-stamps">D.2 One field, many stamps</a></li>
+<li class="level-3"><a href="#d-3-message-binding-versus-message-id-timing">D.3 Message binding versus Message-ID timing</a></li>
+<li class="level-3"><a href="#d-4-send-time-runtime-constraints">D.4 Send-time runtime constraints</a></li>
+<li class="level-3"><a href="#d-5-cryptographic-runtime-availability">D.5 Cryptographic runtime availability</a></li>
+<li class="level-3"><a href="#d-6-recipient-binding-at-the-receiver">D.6 Recipient binding at the receiver</a></li>
+<li class="level-3"><a href="#d-7-bcc-handling-as-implemented">D.7 Bcc handling as implemented</a></li>
+<li class="level-3"><a href="#d-8-replay-ledger-scope">D.8 Replay ledger scope</a></li>
+<li class="level-3"><a href="#d-9-interoperability-discipline">D.9 Interoperability discipline</a></li>
+<li class="level-2"><a href="#references">References</a></li>
+  </ul>
+</nav>
+
+<h1 id="esf-end-spam-forever">ESF — End Spam Forever</h1>
+<h2 id="a-proof-of-work-framework-for-email-abuse-resistance">A Proof-of-Work Framework for Email Abuse Resistance</h2>
+<p><strong>Technical Whitepaper — Version 1.0.1 (Pre-RFC)</strong> · 25 August 2026 · amended with reference-client learnings (Appendix D)</p>
+<p><strong>Objective.</strong> Make unsolicited bulk email economically unattractive through verifiable per-recipient computational cost - while remaining easy to integrate into existing email infrastructure and nearly invisible to ordinary users.</p>
+<blockquote><strong>Draft status.</strong> This whitepaper defines the ESF v1.0 reference architecture and initial design direction. It is not an IETF standard. Wire syntax, work-profile parameters, policy discovery and SMTP extension details remain subject to implementation experience, benchmarking, interoperability testing and public standards review.</blockquote>
+<h2 id="abstract">Abstract</h2>
+<p>Email is intentionally cheap to send. That property made email universal, but it also makes high-volume abuse unusually inexpensive. ESF - End Spam Forever - introduces a vendor-neutral Proof-of-Work (PoW) layer for email. An untrusted sender performs a bounded amount of computational work for a specific recipient and message context, attaches the resulting compact proof, and the receiver verifies it at negligible cost relative to generating it. The work is not a payment, identity credential, reputation score, or content classification. It is a scarce-resource signal: the sender demonstrates that sending this message was not computationally free.</p>
+<p>ESF is designed around two primary principles: integrability and usability. The initial ESF-Stamp profile can be implemented incrementally by mail clients, plugins, gateways and spam filters without replacing SMTP, while a future ESF-SMTP profile can enforce work per envelope recipient during MTA-to-MTA delivery. The protocol is algorithm-agile from the start: ESF v1 defines a highly portable SHA-256 profile and a memory-hard Argon2id profile, while allowing future work functions to be introduced without changing the core protocol.</p>
+<p>ESF complements SPF, DKIM and DMARC rather than replacing them. Those mechanisms establish or align domain authorization; ESF answers a different question: how much scarce computational effort did the sender expend to reach this recipient?</p>
+<p>For ordinary users, the cryptography is deliberately abstracted away. A receiver should be able to express ESF primarily as a simple traffic-light signal - green, yellow or red - and use that signal in automatic mail-handling policies. Algorithm, difficulty and timestamp details are diagnostic information, not a usability prerequisite.</p>
+<blockquote><strong>Core proposition.</strong> A message that costs almost nothing to transmit can be sent millions of times. If an unknown sender must spend a small but non-trivial amount of work per recipient, normal correspondence remains practical while indiscriminate bulk delivery becomes progressively more expensive.</blockquote>
+<h2 id="document-map">Document map</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>Section</th><th>Purpose</th></tr></thead><tbody>
+<tr><td>1-3</td><td>Problem, prior art, resource-security perspective and positioning</td></tr>
+<tr><td>4-5</td><td>Integrability First, Usability First and architecture</td></tr>
+<tr><td>6-9</td><td>ESF-Stamp, work profiles, policy and future SMTP enforcement</td></tr>
+<tr><td>10-11</td><td>Integration, automation and traffic-light UX</td></tr>
+<tr><td>12-13</td><td>Threat model, operations and environmental constraints</td></tr>
+<tr><td>14-17</td><td>Deployment, RFC/IANA path, open questions and conclusion</td></tr>
+<tr><td>Appendices</td><td>Wire grammar, validation pseudocode, Thunderbird profile and reference-client learnings</td></tr>
+</tbody></table></div>
+<h2 id="1-the-problem-esf-is-intended-to-solve">1. The problem ESF is intended to solve</h2>
+<p>The economic asymmetry of email is the central problem. Creating and transmitting another copy of a message is extremely cheap for the sender, while receiving systems and users incur filtering, storage, attention and security costs. Traditional anti-spam systems therefore attempt to infer intent after the sender has already obtained the right to deliver traffic to the receiver.</p>
+<p>Content filters are probabilistic and can be evaded or can generate false positives.</p>
+<p>IP and domain reputation are valuable but create bootstrap problems for new senders and can be abused through compromised infrastructure.</p>
+<p>SPF, DKIM and DMARC help validate use of domains; they do not make authorized bulk sending expensive.</p>
+<p>Rate limits work within a provider or administrative domain but are not a universal end-to-end economic signal.</p>
+<p>CAPTCHAs and challenge-response mail systems impose user interaction and create accessibility and backscatter problems.</p>
+<p>ESF changes the sender-receiver cost relationship before the proof is treated as a positive delivery signal. The receiver can still use every existing anti-abuse control. ESF simply adds a new, independently measurable property: computational effort targeted at the receiving mailbox or receiving SMTP transaction.</p>
+<h2 id="2-prior-art">2. Prior art</h2>
+<p>The idea of computational postage for email is not new. Dwork and Naor proposed in 1992 that access to a shared resource, including delivery of junk email, could require a moderately expensive computation that is easy to verify [1]. Adam Back later developed Hashcash, a practical hash-based cost function explicitly motivated by throttling abuse of unmetered resources such as email [2]. Research subsequently examined memory-bound functions because raw CPU-bound functions can be accelerated disproportionately by specialized hardware [3].</p>
+<p>ESF does not claim invention of Proof-of-Work for email. Its contribution is a deployment-oriented framework for modern email: current message formats, current authentication mechanisms, client extensions, server filtering, policy discovery, algorithm agility, recipient privacy, replay controls and a concrete path toward an Internet-Draft.</p>
+<h3 id="2-1-resource-based-security-softwar-and-bitcoin">2.1 Resource-based security: SOFTWAR and Bitcoin</h3>
+<p>Most email security controls operate primarily in the logical domain: authenticate identities, validate signatures, classify content, compare reputation, or apply rules. ESF adds a different dimension. It asks an untrusted sender to demonstrate the expenditure of a scarce physical resource before the message receives positive delivery credit. The security property is therefore partly economic and physical, not only algorithmic.</p>
+<p>Jason P. Lowery's 2023 MIT thesis SOFTWAR: A Novel Theory on Power Projection and the National Strategic Significance of Bitcoin proposes a much broader interpretation of Proof-of-Work: that coupling digital actions to measurable physical energy expenditure can create a form of physical cost and power projection in cyberspace [14]. ESF treats this as conceptual inspiration, not as an established consensus theory and not as a dependency of the protocol. ESF adopts only the narrower engineering insight that abuse becomes harder to scale when a digital action is bound to scarce computational resources.</p>
+<p>Bitcoin is the most prominent large-scale operational example of Proof-of-Work. Its original design uses hash-based work to make the accepted transaction history costly to rewrite and to coordinate agreement without a central authority [15]. ESF does not use a blockchain, cryptocurrency, mining reward or global consensus. It reuses only the underlying scarcity primitive: provable computational work can impose a real marginal cost on an otherwise cheap digital action.</p>
+<blockquote><strong>Resource-security principle.</strong> ESF deliberately introduces a small, bounded amount of physical resource cost into email delivery. The objective is not maximum computation; it is enough per-recipient friction to change abuse economics while keeping legitimate communication practical.</blockquote>
+<h2 id="3-relationship-to-existing-email-security">3. Relationship to existing email security</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>Mechanism</th><th>Primary question</th><th>What ESF adds</th></tr></thead><tbody>
+<tr><td>SPF</td><td>Is this SMTP source authorized to use a domain in the envelope/HELO context?</td><td>No replacement; ESF adds sender effort.</td></tr>
+<tr><td>DKIM</td><td>Did a domain sign selected message content and headers?</td><td>ESF can use DKIM identity as a trust/exception input.</td></tr>
+<tr><td>DMARC</td><td>Does the visible author domain align with authenticated SPF/DKIM identity and policy?</td><td>ESF adds economic friction even when domain use is authorized.</td></tr>
+<tr><td>ARC</td><td>What authentication assessments were observed through intermediaries?</td><td>Potential future carriage of ESF assessment through forwarding paths.</td></tr>
+<tr><td>ESF</td><td>Was sufficient computational work performed for this recipient/message context?</td><td>A scarce-resource signal, not identity or content safety.</td></tr>
+</tbody></table></div>
+<p>This separation is important. A DMARC pass, for example, establishes authorized domain use but is not itself a guarantee that a message is desirable or safe; the current DMARC specification explicitly treats such results as inputs to broader receiver policy [8]. ESF follows the same principle: a valid stamp is evidence of work, not evidence of benevolent intent.</p>
+<h2 id="4-design-principles-goals-and-non-goals">4. Design principles, goals and non-goals</h2>
+<h3 id="4-1-integrability-first">4.1 Integrability First</h3>
+<p>ESF must fit into email as it exists. Adoption cannot depend on a coordinated flag day, replacement of SMTP, a central service, or simultaneous support by every mail provider. A useful implementation must be deployable at one integration point and still provide value when adjacent systems are unaware of ESF.</p>
+<p>The first deployment path is therefore deliberately additive: generate or verify a compact stamp in a mail client, webmail application, gateway or spam filter; transport the message through normal SMTP; and expose the result to existing filtering and policy engines. Server-to-server ESF negotiation is a later strengthening step, not a prerequisite.</p>
+<p>Implementations SHOULD keep the protocol core independent of any specific mail client or vendor so that the same test vectors and verification library can be reused by Thunderbird, Outlook integrations, webmail, MTAs, Rspamd, SpamAssassin and hosted email services.</p>
+<h3 id="4-2-usability-first">4.2 Usability First</h3>
+<p>ESF should require almost no cryptographic knowledge from ordinary users. The primary user-facing concept is a traffic light, not a hash algorithm. Green means the message satisfies the receiver's ESF policy, yellow means a valid but weak or non-preferred proof is present, and red means no acceptable ESF proof is available.</p>
+<p>Algorithm, difficulty, memory cost, timestamp and verification details MAY be available under an Advanced or Details view for diagnostics and expert users, but they MUST NOT be required to understand or operate ESF.</p>
+<blockquote><strong>Two first-order requirements.</strong> 1. Integrability: ESF must be incrementally deployable across existing email clients, servers and filters.<br>2. Usability: the normal user experience should be no more complex than green, yellow or red plus sensible automatic actions.</blockquote>
+<h3 id="4-3-protocol-and-security-goals">4.3 Protocol and security goals</h3>
+<p>Per-recipient cost: bulk delivery should scale approximately with the number of recipients, not only the number of unique message bodies.</p>
+<p>Asymmetric verification: producing a proof must be materially more expensive than validating one.</p>
+<p>Incremental deployment: useful implementations must be possible before global MTA support exists.</p>
+<p>No central authority: the core protocol must not require a global token issuer, payment processor or sender registry.</p>
+<p>Algorithm agility: the work function and difficulty policy must be replaceable without redefining the entire protocol.</p>
+<p>Privacy awareness: BCC and recipient identifiers must not be unnecessarily exposed.</p>
+<p>Compatibility: ESF must coexist with SMTP, MIME, forwarding, mailing lists, DKIM, SPF, DMARC, ARC, S/MIME and OpenPGP.</p>
+<p>Fail-safe adoption: absence of ESF should initially be neutral; malformed or fraudulent proofs may be negative signals.</p>
+<h3 id="4-4-non-goals">4.4 Non-goals</h3>
+<p>Authenticating the human sender.</p>
+<p>Proving that message content is safe, truthful or non-malicious.</p>
+<p>Replacing existing anti-spam classifiers or reputation systems.</p>
+<p>Eliminating targeted phishing from well-resourced attackers.</p>
+<p>Guaranteeing equal computational cost across every hardware class.</p>
+<p>Requiring all legitimate bulk mail to perform PoW; authenticated/consented streams can be exempted by receiver policy.</p>
+<h2 id="5-architecture">5. Architecture</h2>
+<p>ESF is intentionally layered to maximize integrability. The same proof concept can be generated or consumed at different points in the existing email path, allowing adoption to begin in a single client or filter and later move toward stronger server-side enforcement. Enforcement strength depends on where the proof is created and verified.</p>
+<p>Figure 1 - Two deployment modes: message-level ESF-Stamp and future SMTP-envelope enforcement.</p>
+<h3 id="5-1-mode-a-esf-stamp">5.1 Mode A: ESF-Stamp</h3>
+<p>The sender creates a proof and adds one or more ESF-Stamp header fields to the RFC 5322 message. Receiving clients, gateways or filters verify the stamp. This is the fastest route to a working ecosystem because RFC 5322 permits optional header fields, and current Thunderbird APIs can add custom compose headers and read incoming message headers [5][9].</p>
+<h3 id="5-2-mode-b-esf-smtp">5.2 Mode B: ESF-SMTP</h3>
+<p>A future SMTP service extension moves the proof into the SMTP envelope. The receiving MTA advertises ESF support through EHLO, and proof material is associated with each RCPT TO transaction. This is the strongest model because the receiver knows the actual envelope recipient, BCC information never needs to be embedded in message headers, and a proof cannot be amortized across recipients without the receiving MTA detecting it. RFC 5321 explicitly provides a service-extension model and permits registered parameters on SMTP commands [4].</p>
+<h2 id="6-esf-stamp-protocol-proposal-v0-1">6. ESF-Stamp protocol proposal (v0.1)</h2>
+<blockquote><strong>Header naming decision.</strong> The standards-track target is ESF-Stamp, not a new X- prefixed permanent field, because RFC 6648 deprecates the X- convention for new application parameters [6]. However, current Thunderbird MailExtension customHeaders require X- names, so X-ESF-Stamp is acceptable as a prototype transport compatibility field until a standards-compliant integration path exists.</blockquote>
+<h3 id="6-1-example-header">6.1 Example header</h3>
+<pre class="lang-text"><code>ESF-Stamp: v=1; alg=sha256; d=22; t=1787651400;
+           sid=F8Y0...Q9; rid=AP3K...7N; mid=2T1C...ZZ;
+           salt=7a12d4b5e6891f20; nonce=000000000019d82c</code></pre>
+<p>The line folding above is illustrative. A real implementation must serialize the field according to the final ABNF and normal email header folding rules.</p>
+<h3 id="6-2-fields">6.2 Fields</h3>
+<div class="table-scroll"><table>
+<thead><tr><th>Field</th><th>Meaning</th><th>v0.1 requirement</th></tr></thead><tbody>
+<tr><td>v</td><td>ESF protocol version</td><td>MUST be 1.</td></tr>
+<tr><td>alg</td><td>Registered work-function identifier</td><td>Initial ESF v1 profiles: sha256 and argon2id. Receivers decide which profiles they accept or prefer.</td></tr>
+<tr><td>d</td><td>Difficulty parameter</td><td>Profile-specific target difficulty. Values are not comparable across different algorithms.</td></tr>
+<tr><td>t</td><td>Stamp creation time</td><td>Unix time in UTC seconds.</td></tr>
+<tr><td>sid</td><td>Sender binding token</td><td>Hash of canonical RFC5322.From mailbox used for anti-reuse binding.</td></tr>
+<tr><td>rid</td><td>Recipient binding token</td><td>Salted hash of canonical recipient mailbox; receiver recomputes locally.</td></tr>
+<tr><td>mid</td><td>Message binding token</td><td>Hash of normalized Message-ID value.</td></tr>
+<tr><td>salt</td><td>Random per-stamp salt</td><td>At least 64 random bits; 128 bits recommended.</td></tr>
+<tr><td>nonce</td><td>Work nonce</td><td>Variable searched by sender until target condition is satisfied.</td></tr>
+</tbody></table></div>
+<h3 id="6-3-canonical-identifiers">6.3 Canonical identifiers</h3>
+<p>For the prototype profile, mailbox canonicalization is intentionally conservative: trim surrounding whitespace, parse the addr-spec, lowercase the domain, and preserve the local-part exactly unless an implementation has authoritative provider-specific canonicalization rules. ESF MUST NOT assume that dots, plus tags or case are globally insignificant in local-parts.</p>
+<pre class="lang-text"><code>sid = BASE64URL(SHA256(&quot;from:&quot; || canonical_from))
+rid = BASE64URL(SHA256(&quot;to:&quot;   || canonical_recipient || 0x00 || salt))
+mid = BASE64URL(SHA256(&quot;mid:&quot;  || normalized_message_id))</code></pre>
+<p>The salted recipient token limits casual disclosure compared with placing the clear-text recipient address into the stamp. It does not provide strong anonymity against an observer who can guess the mailbox and test candidates. BCC therefore requires additional handling described below.</p>
+<h3 id="6-4-work-input-and-target">6.4 Work input and target</h3>
+<p>The prototype SHA-256 profile constructs a deterministic byte string from all proof fields except the derived hash itself. Fields are length-delimited or encoded in an unambiguous canonical order. A compact reference representation is:</p>
+<pre class="lang-text"><code>work = UTF8(&quot;ESF1\n&quot; +
+            &quot;alg=sha256\n&quot; +
+            &quot;d=&quot;     + d     + &quot;\n&quot; +
+            &quot;t=&quot;     + t     + &quot;\n&quot; +
+            &quot;sid=&quot;   + sid   + &quot;\n&quot; +
+            &quot;rid=&quot;   + rid   + &quot;\n&quot; +
+            &quot;mid=&quot;   + mid   + &quot;\n&quot; +
+            &quot;salt=&quot;  + salt  + &quot;\n&quot; +
+            &quot;nonce=&quot; + nonce + &quot;\n&quot;)
+
+h = SHA256(work)
+valid iff leading_zero_bits(h) &gt;= d</code></pre>
+<p>For difficulty d, a uniformly random hash succeeds with probability 2^-d, so the expected number of nonce trials is 2^d. Difficulty therefore has an exponential scale: increasing d by one approximately doubles expected work.</p>
+<h3 id="6-5-algorithm-agility-and-initial-work-profiles">6.5 Algorithm agility and initial work profiles</h3>
+<p>ESF is algorithm-agile by design. Version 1 starts with two work profiles rather than treating one hash function as permanent: SHA-256 provides maximum portability and a straightforward Hashcash-style baseline; Argon2id provides a memory-hard alternative that ties each attempt to both computation and memory resources. RFC 9106 explicitly specifies Argon2 as a memory-hard function for password hashing and Proof-of-Work applications [13].</p>
+<p>The sender includes the selected profile and every profile-specific parameter in the canonical work input. The receiver applies its own local policy for accepted algorithms, parameter bounds and minimum work. A sender therefore cannot downgrade a receiver by declaring a weak algorithm or trivial parameters.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Profile</th><th>Cost model</th><th>Initial role</th></tr></thead><tbody>
+<tr><td>sha256</td><td>Compute-bound leading-zero target. Extremely portable and cheap to verify.</td><td>Baseline interoperability and early deployment profile. Specialized hardware advantage must be accounted for in receiver policy.</td></tr>
+<tr><td>argon2id</td><td>Memory-hard work with bounded memory, iterations and lanes plus a target condition.</td><td>Stronger resource-binding profile for receivers that want to reduce the advantage of massively parallel/specialized hardware.</td></tr>
+</tbody></table></div>
+<p>An illustrative Argon2id stamp may carry profile parameters such as mem=16384, iter=1 and lanes=1 together with d. These numbers are not normative. ESF must benchmark real desktop, mobile and server hardware before standardizing profiles. Difficulty numbers for SHA-256 and Argon2id MUST NOT be compared directly.</p>
+<pre class="lang-text"><code>ESF-Stamp: v=1; alg=argon2id; mem=16384; iter=1; lanes=1; d=8;
+           t=1787651400; sid=F8Y0...Q9; rid=AP3K...7N; mid=2T1C...ZZ;
+           salt=7a12d4b5e6891f20; nonce=00000000000003af</code></pre>
+<h3 id="6-6-generation">6.6 Generation</h3>
+<p>Obtain the receiver policy or apply the sender's default ESF difficulty.</p>
+<p>Generate timestamp and cryptographically random salt.</p>
+<p>Canonicalize sender, intended recipient and Message-ID, then compute sid, rid and mid.</p>
+<p>Iterate the nonce in a worker thread or equivalent background execution context.</p>
+<p>Stop when the configured target is met or when the user/policy cancels computation.</p>
+<p>Serialize and attach the ESF-Stamp field without blocking the compose UI.</p>
+<h3 id="6-7-verification">6.7 Verification</h3>
+<p>Verification is deliberately ordered from cheapest to more expensive checks to prevent attacker-controlled headers from creating a receiver-side denial of service.</p>
+<ol><li>Enforce a strict maximum header size and a maximum number of ESF-Stamp fields.</li><li>Parse version, algorithm and numeric fields using bounded values; reject duplicates or ambiguous syntax.</li><li>Reject unsupported algorithms before performing cryptographic work.</li><li>Enforce local minimum and maximum acceptable difficulty; never trust an attacker-supplied difficulty as a reason to perform extra work.</li><li>Validate timestamp against local freshness and future-skew limits.</li><li>Recompute sid, rid and mid for the local message/recipient context.</li><li>Perform one work-function verification operation and compare the result with the claimed difficulty.</li><li>Check the replay cache before assigning a positive ESF result.</li></ol>
+<p>Figure 2 - Stamp generation, verification and policy use.</p>
+<h3 id="6-8-replay-resistance">6.8 Replay resistance</h3>
+<p>ESF does not need to cryptographically authenticate message content to achieve its principal economic goal, but it must prevent the same successful stamp from being accepted repeatedly for a recipient. Receivers SHOULD cache a compact stamp identifier for at least the accepted freshness window. A suitable identifier is SHA-256 of the canonical ESF-Stamp field. A second use for the same local recipient is classified as replay and receives no positive ESF credit.</p>
+<p>Binding to Message-ID makes accidental stamp reuse across messages unlikely and raises the cost of intentional reuse. A future strict profile may additionally bind a DKIM-style canonical body hash; the trade-off is fragility when intermediaries modify content.</p>
+<h3 id="6-9-multiple-recipients-and-bcc">6.9 Multiple recipients and BCC</h3>
+<p>Recipient binding is where message-header PoW is inherently weaker than SMTP-envelope PoW. A message addressed to multiple visible To/Cc recipients may carry multiple ESF-Stamp fields, one per recipient. That causes work to scale with recipients, which is desirable. BCC is different: embedding a BCC recipient identifier in a common message can leak information about the hidden recipient.</p>
+<p>Preferred: generate a distinct message copy for each BCC recipient and attach only that recipient's private stamp to that copy.</p>
+<p>If an MUA cannot safely create per-BCC copies, it SHOULD omit recipient-specific ESF credit for BCC rather than expose the mailbox.</p>
+<p>Receivers SHOULD assign lower assurance to domain-scoped or otherwise amortizable proofs.</p>
+<p>The future ESF-SMTP profile solves this cleanly because the actual recipient is already known in the RCPT TO transaction and is never carried in the message body or headers.</p>
+<p>Implementation note: current client APIs (Thunderbird customHeaders, Outlook internetHeaders) keep at most one header value per field name, so the reference clients serialize all stamps of a message as a comma-separated list inside a single ESF-Stamp field. Receivers MUST accept both forms - one stamp per field and a stamp list within one field - subject to the anti-DoS bounds of section 6.7 (see Appendix D).</p>
+<h2 id="7-difficulty-and-economic-model">7. Difficulty and economic model</h2>
+<h3 id="7-1-difficulty-is-policy-not-a-universal-constant">7.1 Difficulty is policy, not a universal constant</h3>
+<p>A fixed global number such as 22 bits is useful for a prototype but is not suitable as a permanent Internet-wide policy. Hardware capability, energy constraints and abuse economics change over time. ESF therefore separates protocol syntax from receiver policy.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Difficulty</th><th>Expected SHA-256 trials</th><th>Relative work</th></tr></thead><tbody>
+<tr><td>18</td><td>262,144</td><td>1/16 of d=22</td></tr>
+<tr><td>20</td><td>1,048,576</td><td>1/4</td></tr>
+<tr><td>22</td><td>4,194,304</td><td>baseline example</td></tr>
+<tr><td>24</td><td>16,777,216</td><td>4x</td></tr>
+<tr><td>26</td><td>67,108,864</td><td>16x</td></tr>
+</tbody></table></div>
+<p>These values describe algorithmic work, not wall-clock time. Wall-clock time depends heavily on implementation, processor, GPU/ASIC availability, thermal limits and parallelism. ESF implementations should calibrate against measured local performance rather than promise a universal number of milliseconds.</p>
+<h3 id="7-2-initial-profiles-sha-256-and-argon2id">7.2 Initial profiles: SHA-256 and Argon2id</h3>
+<p>SHA-256 has excellent interoperability, compact proofs and extremely cheap verification, which makes it ideal for bootstrapping an ecosystem. Its weakness is also clear: GPUs and especially specialized hardware can evaluate it disproportionately efficiently. Argon2id complements it with a memory-hard cost model standardized in RFC 9106 [13]. ESF v1 therefore starts with both profiles and lets receiver policy decide whether SHA-256 is sufficient, weak-but-acceptable, or not accepted for a given context.</p>
+<p>Policy thresholds are profile-specific. For example, a receiver may classify a particular SHA-256 proof as yellow while accepting a calibrated Argon2id proof as green. ESF does not define a universal conversion between work functions; operational benchmarking determines their relative policy strength.</p>
+<blockquote><strong>Protocol requirement.</strong> ESF MUST remain algorithm-agile. The initial interoperable family includes SHA-256 for maximum portability and Argon2id for memory-hard work. Receivers independently define accepted profiles, parameter bounds and minimum strength, and future algorithms can be registered or retired without changing the base ESF message model.</blockquote>
+<h3 id="7-3-trust-aware-difficulty">7.3 Trust-aware difficulty</h3>
+<p>The most practical receiver policy does not charge every message equally. ESF is strongest when it acts as a friction mechanism specifically for unknown or low-trust senders.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Context</th><th>Illustrative ESF policy</th></tr></thead><tbody>
+<tr><td>Known personal contact</td><td>No PoW or minimal work.</td></tr>
+<tr><td>Previously replied-to correspondent</td><td>No PoW or low work.</td></tr>
+<tr><td>Authenticated trusted organization</td><td>No PoW or policy-defined exemption based on DKIM/DMARC identity.</td></tr>
+<tr><td>Unknown sender</td><td>Normal PoW requirement.</td></tr>
+<tr><td>Low-reputation / suspicious stream</td><td>Higher PoW requirement or quarantine.</td></tr>
+<tr><td>Confirmed opt-in bulk sender</td><td>Receiver/provider exemption; do not waste computation merely because mail is bulk.</td></tr>
+</tbody></table></div>
+<h2 id="8-receiver-policy-discovery">8. Receiver policy discovery</h2>
+<p>A sender needs to know what work is useful before transmitting a message. ESF proposes DNS discovery as an optional first-stage mechanism because it is cacheable, decentralized and already familiar to email operators through SPF, DKIM and DMARC. This is a proposal for experimentation, not yet a registered DNS scheme.</p>
+<pre class="lang-text"><code>_esf.example.org. 300 IN TXT &quot;v=ESF1; p=optional; alg=argon2id,sha256; profile=default; maxage=604800&quot;</code></pre>
+<div class="table-scroll"><table>
+<thead><tr><th>Tag</th><th>Meaning</th></tr></thead><tbody>
+<tr><td>v</td><td>Policy version; ESF1.</td></tr>
+<tr><td>p</td><td>Receiver posture: none, optional, prefer, require.</td></tr>
+<tr><td>alg</td><td>Ordered list of accepted work profiles.</td></tr>
+<tr><td>d</td><td>Requested baseline difficulty for unknown senders.</td></tr>
+<tr><td>maxage</td><td>Maximum accepted stamp age in seconds.</td></tr>
+<tr><td>contact</td><td>Optional HTTPS URI for ESF policy documentation; not required for validation.</td></tr>
+</tbody></table></div>
+<p>DNS policy is advisory in the initial client profile. A receiver always applies local policy at validation time. DNSSEC can protect the discovery record where deployed, but ESF must remain safe when DNS policy is unsigned: an attacker who removes or alters an advisory record must not gain cryptographic authority over receiver validation.</p>
+<h2 id="9-future-esf-smtp-profile">9. Future ESF-SMTP profile</h2>
+<p>RFC 5321 provides a formal SMTP extension mechanism in which servers advertise capabilities using EHLO and extensions can define parameters for MAIL or RCPT commands [4]. ESF can use that architecture to enforce one proof per envelope recipient at MTA-to-MTA time.</p>
+<pre class="lang-text"><code>S: 220 mx.example.org ESMTP
+C: EHLO sender.example
+S: 250-mx.example.org
+S: 250-ESF v=1 alg=argon2id,sha256 profile=default challenge=R4nd0m...
+S: 250 PIPELINING
+C: MAIL FROM:&lt;sender@sender.example&gt;
+C: RCPT TO:&lt;alice@example.org&gt; ESF=&lt;recipient-proof&gt;
+S: 250 2.1.5 Recipient accepted</code></pre>
+<p>This syntax is illustrative only. A real SMTP extension would require an Internet-Draft defining the registered EHLO keyword, challenge lifetime, recipient parameters, retry semantics, enhanced status codes, relay behavior, maximum command-length impact and interoperability with queueing/retries.</p>
+<p>Per-recipient accounting is authoritative because RCPT TO is explicit.</p>
+<p>BCC privacy is naturally preserved.</p>
+<p>A connection-specific challenge makes precomputation and broad proof reuse harder.</p>
+<p>MTAs can reject or defer insufficient work before accepting the message body, reducing downstream storage/filtering cost.</p>
+<p>Deployment is slower because sending and receiving MTAs need support; MUA-only plugins cannot perform final MX negotiation through a normal submission relay.</p>
+<h2 id="10-integration-profiles">10. Integration profiles</h2>
+<p>Integration is a first-order protocol requirement. ESF is not a replacement mail stack; it is a small generate/transport/verify/policy layer that can be inserted wherever an organization already controls mail flow. The strongest adoption strategy is to support multiple integration depths with the same protocol core.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Integration point</th><th>Generate</th><th>Verify</th><th>Primary value</th></tr></thead><tbody>
+<tr><td>Mail client / plugin</td><td>Yes</td><td>Yes</td><td>Immediate user-visible protection and local automation; no server replacement.</td></tr>
+<tr><td>Gateway / spam filter</td><td>Optional</td><td>Yes</td><td>Pre-inbox scoring for all users behind the gateway.</td></tr>
+<tr><td>Webmail / hosted provider</td><td>Yes</td><td>Yes</td><td>Provider-scale generation, validation and placement policies.</td></tr>
+<tr><td>SMTP MTA extension</td><td>Negotiated</td><td>Yes</td><td>Authoritative per-envelope-recipient enforcement and BCC-safe accounting.</td></tr>
+</tbody></table></div>
+<h3 id="10-1-mail-user-agents">10.1 Mail user agents</h3>
+<p>MUA implementations generate a stamp before sending, expose non-blocking progress/cancellation, and validate stamps when displaying mail. Thunderbird is a practical reference implementation because current MailExtension APIs expose compose hooks and efficient access to incoming headers [9]. One prototype constraint is important: Thunderbird's current customHeaders API requires extension-defined headers to use an X- prefix. A Thunderbird proof-of-concept should therefore use X-ESF-Stamp internally, while the standards target remains the registrable ESF-Stamp field defined by the future RFC.</p>
+<p>Microsoft Outlook is the second reference MUA. Office.js exposes persistent custom internet headers from Mailbox requirement set 1.8 (set on compose, full MIME header access on read) and a supported send interception point (OnMessageSend / Smart Alerts) from requirement set 1.12 [16]. Unlike Thunderbird, the Outlook API preserves header names as given, so the Outlook client already transports the standards-track ESF-Stamp field; both header names are accepted on receipt during the prototype phase. Outlook-specific constraints - the event runtime limit, the JavaScript-only runtime of the classic Windows client and the administrator-deployment requirement for automatic send interception - are recorded in Appendix D.</p>
+<p>Computation MUST run off the UI thread, e.g. Worker/WASM worker.</p>
+<p>Users SHOULD be able to send without ESF when the receiver does not require it.</p>
+<p>A missing stamp MUST NOT be presented as malicious during the adoption phase.</p>
+<p>The default UI SHOULD expose only the ESF traffic-light state. Cryptographic details belong in an optional Advanced/Details view, and ESF MUST never label a message as “safe” solely because work was verified.</p>
+<h3 id="10-2-gateways-and-server-filters">10.2 Gateways and server filters</h3>
+<p>Server-side integration is operationally more valuable than a client badge because it can incorporate ESF before inbox placement. Gateways can verify ESF once, add a local Authentication-Results-style assessment or internal metadata, and feed the result into existing spam scoring. A future ESF-specific result token could be standardized after deployment experience.</p>
+<h3 id="10-3-webmail-and-hosted-providers">10.3 Webmail and hosted providers</h3>
+<p>Hosted providers can implement ESF at the server, in a web client using workers, or both. Provider-side computation is a policy decision: doing work centrally may weaken the economic linkage to the human sender if a provider subsidizes unlimited proofs. For consumer platforms, rate limits and account reputation should therefore remain complementary controls.</p>
+<h3 id="10-4-mailing-lists-and-forwarding">10.4 Mailing lists and forwarding</h3>
+<p>Mailing lists intentionally fan one accepted submission out to many subscribers. Requiring the original author to precompute for unknown final subscribers is impractical and can expose membership. The list operator should instead be treated as a new sending actor: it can receive mail under its own policy and either be trusted by subscribers or generate outgoing ESF proofs per subscriber. Forwarders should preserve valid ESF-Stamp fields but receivers should assess them only for the recipient binding they can verify.</p>
+<h2 id="11-receiver-scoring-and-ux-semantics">11. Receiver scoring and UX semantics</h2>
+<p>The normal receiver experience should be immediate and low-friction. ESF deliberately uses a traffic-light model so users do not have to interpret algorithms, bit counts, memory parameters or cryptographic terminology.</p>
+<p>The visible color is a policy result, not a cryptographic primitive. Receiver software maps the underlying validation result and local policy to green, yellow or red.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Signal</th><th>Meaning</th><th>Default policy behavior</th></tr></thead><tbody>
+<tr><td>GREEN</td><td>A valid ESF proof satisfies or exceeds the receiver's current policy.</td><td>Positive anti-spam signal; normally deliver. Existing malware/phishing/authentication checks still apply.</td></tr>
+<tr><td>YELLOW</td><td>A valid ESF proof exists but is weak, deprecated, below the preferred profile, or otherwise receives limited credit.</td><td>Deliver normally or flag depending on policy; do not grant full ESF credit.</td></tr>
+<tr><td>RED</td><td>No acceptable ESF proof is available: typically no ESF stamp, or an unacceptable/invalid result.</td><td>Use normal spam filtering; optionally increase score, route to Unverified/Junk, or apply stricter rules for unknown senders.</td></tr>
+</tbody></table></div>
+<blockquote><strong>Security UI rule.</strong> The primary UX is a simple ESF traffic light. GREEN means sufficient work under local policy, YELLOW means valid but weak/limited work, and RED means no acceptable proof. These colors describe ESF work only - never sender identity, truthfulness, malware safety or overall message trustworthiness.</blockquote>
+<p>Internally, implementations SHOULD distinguish at least MISSING, INVALID, WEAK and STRONG even if the simplified UI maps both MISSING and unacceptable results to red. This distinction matters for automation: a message from a legacy sender with no ESF support is not equivalent to a message containing a malformed, replayed or deliberately insufficient proof.</p>
+<p>Automation is more important than exposing cryptographic telemetry. A default deployment can treat green as a positive spam-scoring signal, yellow as neutral or mildly flagged, and red as an input to existing filtering. Known contacts, previously replied-to correspondents and authenticated trusted organizations can be exempted or override ESF requirements. During early adoption, missing ESF SHOULD NOT by itself trigger automatic deletion.</p>
+<p>Technical information such as Algorithm: Argon2id, Difficulty, Required threshold, Generated time and raw verification result is useful for diagnostics and expert users, but it is explicitly nice-to-have. It belongs behind a Details or Advanced disclosure, not in the primary message experience.</p>
+<h3 id="11-1-advanced-internal-validation-states">11.1 Advanced/internal validation states</h3>
+<div class="table-scroll"><table>
+<thead><tr><th>Internal ESF state</th><th>UI mapping</th><th>Recommended interpretation / action</th></tr></thead><tbody>
+<tr><td>strong</td><td>GREEN</td><td>Valid proof satisfies receiver profile and minimum strength. Positive anti-spam signal; never bypass other security checks.</td></tr>
+<tr><td>weak</td><td>YELLOW</td><td>Valid proof exists but is below preferred policy or uses a weaker/deprecated profile. Limited or neutral credit.</td></tr>
+<tr><td>missing</td><td>RED</td><td>No ESF proof. During adoption, process through existing filters; do not treat absence alone as malicious.</td></tr>
+<tr><td>invalid</td><td>RED</td><td>Malformed, stale, wrong-recipient, insufficient, replayed or otherwise unacceptable proof. May be a negative spam signal.</td></tr>
+<tr><td>unsupported</td><td>YELLOW or RED</td><td>Locally unsupported profile. Map by policy; never execute unbounded or attacker-selected work.</td></tr>
+</tbody></table></div>
+<h2 id="12-threat-model-and-security-analysis">12. Threat model and security analysis</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>Threat</th><th>Effect</th><th>Mitigation / limitation</th></tr></thead><tbody>
+<tr><td>Proof replay</td><td>Attacker resends one successful stamp.</td><td>Recipient + Message-ID binding and replay cache.</td></tr>
+<tr><td>Cross-recipient reuse</td><td>One proof is sent to many mailboxes.</td><td>rid binding; authoritative prevention in ESF-SMTP.</td></tr>
+<tr><td>Precomputation</td><td>Work is generated before a campaign is known.</td><td>Random salt, timestamp, recipient binding; SMTP challenges later.</td></tr>
+<tr><td>Specialized hardware</td><td>Spam operator gets lower cost than normal users.</td><td>Algorithm agility; evaluate memory-/bandwidth-hard profiles.</td></tr>
+<tr><td>Botnets / stolen endpoints</td><td>Attacker externalizes computation onto victims.</td><td>ESF cannot eliminate this; account/reputation/security controls remain necessary.</td></tr>
+<tr><td>Header bombing</td><td>Many/huge ESF fields consume parser resources.</td><td>Strict count/size caps before cryptographic verification.</td></tr>
+<tr><td>Difficulty DoS</td><td>Attacker declares absurd difficulty.</td><td>Verifier uses local accepted bounds; verification is one bounded operation.</td></tr>
+<tr><td>Freshness manipulation</td><td>Old proofs are replayed.</td><td>Local max-age and future-clock-skew checks.</td></tr>
+<tr><td>BCC disclosure</td><td>Recipient token can reveal hidden recipient.</td><td>Per-BCC message copies; omit credit if unsafe; ESF-SMTP long-term.</td></tr>
+<tr><td>Malicious but funded sender</td><td>Attacker willingly pays work cost.</td><td>PoW is friction, not authentication; existing content/reputation controls continue.</td></tr>
+<tr><td>Forwarding/list mutation</td><td>Recipient binding or message context changes.</td><td>Trust intermediary, recompute downstream proofs, or treat original stamp as non-applicable.</td></tr>
+<tr><td>Algorithm downgrade</td><td>Weak profile selected intentionally.</td><td>Receiver policy defines minimum accepted profile/difficulty; DNS discovery is not authoritative.</td></tr>
+</tbody></table></div>
+<h3 id="12-1-what-esf-can-realistically-reduce">12.1 What ESF can realistically reduce</h3>
+<p>ESF is strongest against broad, low-value, unsolicited campaigns where the attacker depends on near-zero marginal delivery cost. It is weaker against highly targeted abuse, compromised legitimate accounts, well-funded fraud and botnets. “End Spam Forever” is the project goal and brand; the security claim is narrower: impose measurable per-recipient scarcity that current email does not inherently require.</p>
+<h2 id="13-operational-accessibility-and-environmental-considerations">13. Operational, accessibility and environmental considerations</h2>
+<p>Proof-of-Work intentionally consumes computation and therefore ultimately physical energy. That cost is the security mechanism, not an accidental side effect. In the resource-security framing discussed by Lowery, the important shift is from purely logical permission to measurable physical cost [14]. ESF applies that idea in a deliberately bounded form: it does not seek Bitcoin-scale global competition or continuous mining. Work is small, targeted per recipient, and ideally waived for trusted or consensual communication. Mobile devices and battery-powered clients need configurable limits and may delegate computation to the sender's own trusted submission service.</p>
+<p>Provide a hard computation timeout and cancellation.</p>
+<p>Never consume all logical CPU cores by default.</p>
+<p>Defer or reduce work on battery/thermal constraints when receiver policy permits.</p>
+<p>Expose deterministic policy to assistive technologies; do not make proof generation depend on visual challenges.</p>
+<p>Measure actual hardware performance and publish benchmark methodology for each work profile.</p>
+<p>Keep valid-proof verification substantially cheaper than generation and cap all attacker-controlled parsing paths.</p>
+<h2 id="14-deployment-roadmap">14. Deployment roadmap</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>Phase</th><th>Deliverable</th><th>Success criterion</th></tr></thead><tbody>
+<tr><td>0 - Research</td><td>Whitepaper, threat model, SHA-256 + Argon2id benchmarks, UX policy model.</td><td>Demonstrate practical cost asymmetry and usable green/yellow/red semantics.</td></tr>
+<tr><td>1 - Client prototype</td><td>Thunderbird ESF extension plus reusable protocol library.</td><td>Non-blocking generation/verification, traffic-light UX and interoperable stamps between independent implementations.</td></tr>
+<tr><td>2 - Filter integration</td><td>Rspamd/SpamAssassin/Postfix/Exim or equivalent verifier integrations.</td><td>ESF result influences inbox placement without requiring end-user client support.</td></tr>
+<tr><td>3 - Policy discovery</td><td>Experimental DNS policy and public interoperability test domain.</td><td>Senders can discover accepted profiles and avoid useless work.</td></tr>
+<tr><td>4 - Multi-client ecosystem</td><td>Outlook/webmail/client integrations and SDKs.</td><td>Same protocol and policy semantics work across multiple vendors and integration depths.</td></tr>
+<tr><td>5 - Internet-Draft</td><td>ESF-Stamp registration, profile registry and normative wire specification.</td><td>Independent review and IETF discussion.</td></tr>
+<tr><td>6 - SMTP profile</td><td>Experimental ESF SMTP extension and MTA implementations.</td><td>Per-envelope-recipient enforcement across independent MTAs.</td></tr>
+<tr><td>7 - Standardization</td><td>Refine work profiles, IANA registries, operational and accessibility guidance.</td><td>Standards outcome based on deployment evidence, not theoretical assumptions alone.</td></tr>
+</tbody></table></div>
+<h2 id="15-rfc-and-iana-standardization-path">15. RFC and IANA standardization path</h2>
+<p>The ESF project should separate the explanatory whitepaper from normative protocol documents. A practical sequence is:</p>
+<ol><li>Publish the ESF whitepaper and open-source reference implementation.</li><li>Define a compact “ESF-Stamp for Internet Mail” Internet-Draft using BCP 14 requirement language.</li><li>Request provisional/permanent registration of the ESF-Stamp message header through the applicable IANA message-header process.</li><li>Define an ESF work-profile registry. Initial entries should include SHA-256 and Argon2id with explicit parameter semantics, receiver bounds and a process for adding, deprecating or retiring future profiles without changing the base header format.</li><li>After implementation experience, draft “ESF SMTP Service Extension” with an IANA-registrable EHLO keyword and RCPT parameters.</li><li>Publish separate operational guidance for difficulty policy, allowlists, mailing lists, mobile constraints and abuse handling.</li></ol>
+<p>New experimental header fields should avoid the X- convention because RFC 6648 recommends meaningful non-X names for new parameters [6]. Message header names can be provisionally or permanently registered through the framework established by RFC 3864 [7].</p>
+<h2 id="16-open-design-questions-before-a-standards-track-draft">16. Open design questions before a standards-track draft</h2>
+<p>How should the initial SHA-256 and Argon2id profiles be calibrated across desktop, mobile and server hardware, and which profile(s) should eventually be mandatory-to-implement or preferred? The answer must weigh specialized-hardware advantage, memory pressure, verifier DoS cost, proof size, implementation complexity and browser/MUA portability.</p>
+<p>Should ESF-Stamp bind only recipient + sender + Message-ID, or define an optional DKIM-style canonical body hash profile?</p>
+<p>How should sender and recipient mailbox internationalization (SMTPUTF8 / Unicode) be canonicalized?</p>
+<p>What is the safest DNS discovery name and policy grammar, and should DNSSEC change sender behavior?</p>
+<p>How should receiving systems expose ESF validation in Authentication-Results or a dedicated result field?</p>
+<p>What exact semantics should apply to mailing lists, aliases, forwarding and multi-recipient messages?</p>
+<p>How should difficulty be calibrated across mobile, desktop, server, GPU and specialized hardware classes?</p>
+<p>Can a memory-hard proof provide sufficiently cheap verification to resist receiver-side DoS at Internet scale?</p>
+<p>Which telemetry can measure efficacy without creating new privacy-sensitive reporting channels?</p>
+<h2 id="17-conclusion">17. Conclusion</h2>
+<p>ESF starts from a simple observation: unsolicited email is cheap because the protocol does not require the sender to spend a scarce resource proportional to the number of recipients. Proof-of-Work can introduce that missing friction without a central payment authority. Dwork/Naor and Hashcash established the computational-postage idea; Bitcoin demonstrated that Proof-of-Work can operate as a durable, large-scale security primitive; and Lowery's SOFTWAR thesis provides a broader conceptual lens in which digital security can be tied to physical resource expenditure rather than relying only on logical controls [1][2][14][15]. ESF applies that insight narrowly and pragmatically to email abuse resistance.</p>
+<p>The proposed path is pragmatic: prioritize integrability and usability, ship ESF-Stamp in clients and filters, expose a simple traffic-light result, start with both SHA-256 and Argon2id profiles, measure real-world costs, and use deployment evidence to design a stronger ESF-SMTP profile. ESF should be judged not by whether every spam message disappears, but by whether it materially changes the economics of reaching large numbers of unwilling recipients while preserving the openness and simplicity that made email useful.</p>
+<h2 id="appendix-a-draft-esf-stamp-grammar">Appendix A - Draft ESF-Stamp grammar</h2>
+<p>The following ABNF-like grammar is intentionally preliminary. An Internet-Draft should import RFC 5322 / RFC 5234 productions and specify whitespace, folding and error handling precisely.</p>
+<pre class="lang-abnf"><code>ESF-Stamp = &quot;ESF-Stamp:&quot; OWS stamp *(OWS &quot;;&quot; OWS stamp-param) CRLF
+stamp       = &quot;v=1&quot;
+stamp-param = alg / difficulty / timestamp / sid / rid / mid / salt / nonce / profile-param
+alg         = &quot;alg=&quot; token
+difficulty  = &quot;d=&quot; 1*3DIGIT
+timestamp   = &quot;t=&quot; 1*DIGIT
+sid         = &quot;sid=&quot; b64url
+rid         = &quot;rid=&quot; b64url
+mid         = &quot;mid=&quot; b64url
+salt        = &quot;salt=&quot; 16*64HEXDIG
+nonce       = &quot;nonce=&quot; 1*64HEXDIG
+profile-param = token &quot;=&quot; token
+; Initial profile parameters may include mem, iter and lanes for argon2id.
+; The final Internet-Draft must define allowed parameters per registered profile.</code></pre>
+<h2 id="appendix-b-reference-verification-pseudocode">Appendix B - Reference verification pseudocode</h2>
+<pre class="lang-text"><code>function verifyEsfStamp(message, localRecipient, stamp, policy):
+    if stamp.serializedLength &gt; policy.maxHeaderBytes: return INVALID
+    if stamp.version != 1: return UNSUPPORTED
+    profile = policy.profile(stamp.algorithm)
+    if profile == null: return UNSUPPORTED
+    if !profile.parametersWithinBounds(stamp): return INVALID
+    if stamp.difficulty &lt; profile.minDifficulty: return WEAK
+    if stamp.difficulty &gt; profile.maxDeclaredDifficulty: return INVALID
+    if abs(now - stamp.timestamp) &gt; policy.maxAge: return STALE
+    expectedSid = senderToken(message.from)
+    expectedRid = recipientToken(localRecipient, stamp.salt)
+    expectedMid = messageIdToken(message.messageId)
+    if !constantTimeEqual(stamp.sid, expectedSid): return INVALID
+    if !constantTimeEqual(stamp.rid, expectedRid): return WRONG_RECIPIENT
+    if !constantTimeEqual(stamp.mid, expectedMid): return INVALID
+    stampId = SHA256(canonicalSerialize(stamp))
+    if replayCache.contains(stampId): return REPLAY
+    digest = profile.verifyOneBoundedWork(canonicalWorkInput(stamp), stamp)
+    if leadingZeroBits(digest) &lt; stamp.difficulty: return INVALID
+    replayCache.insert(stampId, expiry=stamp.timestamp + policy.maxAge)
+    return STRONG</code></pre>
+<h2 id="appendix-c-reference-thunderbird-implementation-profile">Appendix C - Reference Thunderbird implementation profile</h2>
+<p>Use a current Thunderbird MailExtension / WebExtension architecture, not legacy XUL add-ons.</p>
+<p>Intercept sending with the supported compose send lifecycle. Because Thunderbird currently restricts extension-defined custom compose headers to X- prefixed names, use X-ESF-Stamp for the Thunderbird prototype; keep ESF-Stamp as the standards-track target field.</p>
+<p>Run nonce search in Worker/WASM Worker code and provide cancellation.</p>
+<p>Read incoming headers using the most efficient available messages API; current Thunderbird releases expose direct header retrieval as well as full/raw message access [9].</p>
+<p>Display the primary GREEN / YELLOW / RED ESF traffic-light state separately from DKIM/DMARC identity indicators; expose algorithm and difficulty only in optional details.</p>
+<p>Keep the protocol core in a standalone library with deterministic test vectors so other email clients and server implementations can interoperate.</p>
+<h2 id="appendix-d-implementation-learnings-from-the-reference-clients">Appendix D - Implementation learnings from the reference clients</h2>
+<p>The Thunderbird MailExtension and the Outlook Office.js add-in are the first two independent implementations of the</p>
+<p>shared ESF protocol core. Both emit and verify identical stamps against a common set of deterministic test vectors.</p>
+<p>The following findings come from building them and should feed the Internet-Draft; where they conflict with earlier</p>
+<p>sections, this appendix reflects the implemented state.</p>
+<h3 id="d-1-header-naming-and-transport">D.1 Header naming and transport</h3>
+<p>Thunderbird's compose API only accepts X- prefixed custom headers, so its prototype transports X-ESF-Stamp. Outlook's</p>
+<p>internetHeaders API preserves names as given, so the Outlook client already sends the standards-track ESF-Stamp</p>
+<p>field. Consequence for every verifier during the prototype phase: accept both names on receipt, prefer emitting</p>
+<p>ESF-Stamp wherever the platform allows it, and never make the X- name part of the permanent design (RFC 6648 [6]).</p>
+<h3 id="d-2-one-field-many-stamps">D.2 One field, many stamps</h3>
+<p>Both client APIs keep a single value per header name, so all stamps of a message travel as a comma-separated list in</p>
+<p>one field (section 6.9). Parsers must bound both axes before any cryptographic work: header length, stamps per field,</p>
+<p>fields per message and fields per stamp. The reference bounds (512 bytes per stamp, 16 stamps per header, 8 stamp</p>
+<p>fields per message, difficulty cap 30) held up in practice and keep verification at exactly one hash per stamp.</p>
+<h3 id="d-3-message-binding-versus-message-id-timing">D.3 Message binding versus Message-ID timing</h3>
+<p>Neither client knows the final Message-ID at the send hook: Thunderbird assigns it after onBeforeSend returns, and</p>
+<p>Outlook assigns it when Exchange accepts the message. Both reference clients therefore mint a random message</p>
+<p>identifier (uuid@esf.invalid), bind mid to it and do not transport the raw identifier - which makes mid an opaque</p>
+<p>uniqueness/replay component rather than a verifiable binding to the carrier message. This is an open protocol issue</p>
+<p>for the Internet-Draft: either carry the minted identifier in the stamp so receivers can verify mid, or redefine the</p>
+<p>message binding (for example a body-hash profile, section 6.8) with explicit semantics.</p>
+<h3 id="d-4-send-time-runtime-constraints">D.4 Send-time runtime constraints</h3>
+<p>Outlook's event-based runtime enforces hard platform limits: automatic send interception requires Mailbox 1.12+, is</p>
+<p>unavailable on Outlook mobile, shows a &quot;taking long&quot; dialog after roughly five seconds, terminates handlers after</p>
+<p>roughly five minutes, and only auto-runs when the add-in is deployed by an organization administrator [16]. Practical</p>
+<p>consequences adopted by both clients: a configurable wall-clock work budget per recipient (default five seconds),</p>
+<p>cooperative cancellation inside the nonce search, and an explicit failure policy - &quot;send without ESF&quot; (default,</p>
+<p>with a visible notice) or &quot;hold the message&quot; - because an event handler cannot ask interactive questions. A partially</p>
+<p>stamped multi-recipient message is treated as failure: honest absence beats a stamp set that shows red for exactly</p>
+<p>the recipients the sender ran out of budget for.</p>
+<h3 id="d-5-cryptographic-runtime-availability">D.5 Cryptographic runtime availability</h3>
+<p>The classic Outlook on Windows event runtime is JavaScript-only: no DOM and no guaranteed WebCrypto. The shared core</p>
+<p>therefore requires a bundled pure-JS SHA-256 that is digest-identical to the WebCrypto path. Random salt generation</p>
+<p>is different: without a cryptographic RNG the clients refuse to generate a stamp instead of falling back to weak</p>
+<p>randomness, because a predictable salt re-enables the precomputation attacks the salt exists to prevent</p>
+<p>(section 6.3). Capability detection with explicit degradation proved essential; feature presence must never be</p>
+<p>assumed from platform names.</p>
+<h3 id="d-6-recipient-binding-at-the-receiver">D.6 Recipient binding at the receiver</h3>
+<p>Neither client platform can enumerate the mailbox aliases a user owns. The rid check (section 6.7 step 6) therefore</p>
+<p>runs against a configurable set of local mailboxes - the signed-in address plus user-declared aliases. Testing rid</p>
+<p>against every address in the To/Cc lines would accept stamps bound to other recipients and is explicitly rejected.</p>
+<p>Because local-parts are case-sensitive under the conservative canonicalization of section 6.3, a stamp binds the</p>
+<p>exact mailbox spelling the sender used; alias handling is receiver configuration, not protocol.</p>
+<h3 id="d-7-bcc-handling-as-implemented">D.7 Bcc handling as implemented</h3>
+<p>Both clients implement the section 6.9 fallback as the default (&quot;omit&quot;: no stamp for Bcc recipients) plus an opt-in</p>
+<p>&quot;token&quot; mode that includes only the salted rid. Neither client can create per-Bcc message copies from its send hook,</p>
+<p>confirming that clean Bcc accounting needs the ESF-SMTP profile. In no configuration does a clear-text Bcc address</p>
+<p>appear in any header.</p>
+<h3 id="d-8-replay-ledger-scope">D.8 Replay ledger scope</h3>
+<p>The reference replay caches are client-local (extension storage in Thunderbird, web storage in Outlook), keyed by the</p>
+<p>SHA-256 of the canonical stamp serialization, pruned at the freshness window and bounded in size. A client-side</p>
+<p>verifier honestly provides per-installation replay detection only; cross-device and cross-user replay detection is a</p>
+<p>server-side integration property (sections 10.2, 9).</p>
+<h3 id="d-9-interoperability-discipline">D.9 Interoperability discipline</h3>
+<p>A single client-neutral protocol core (constants, canonicalization, parser, verifier, policy) shared by both clients,</p>
+<p>plus deterministic test vectors checked by both test suites, was the single most effective safeguard against protocol</p>
+<p>drift. Client adapters contain no protocol logic. Any future integration (webmail, gateway, MTA) should consume the</p>
+<p>same core and vectors rather than reimplementing the wire format.</p>
+<h2 id="references">References</h2>
+<ul><li><strong>[1]</strong> C. Dwork and M. Naor, “Pricing via Processing or Combatting Junk Mail,” CRYPTO 1992, LNCS 740, pp. 139-147.</li><li><strong>[2]</strong> A. Back, “Hashcash - A Denial of Service Counter-Measure,” 1 August 2002.</li><li><strong>[3]</strong> C. Dwork, A. Goldberg and M. Naor, “On Memory-Bound Functions for Fighting Spam,” CRYPTO 2003.</li><li><strong>[4]</strong> J. Klensin, RFC 5321, “Simple Mail Transfer Protocol,” October 2008.</li><li><strong>[5]</strong> P. Resnick, RFC 5322, “Internet Message Format,” October 2008.</li><li><strong>[6]</strong> P. Saint-Andre, D. Crocker and M. Nottingham, RFC 6648 / BCP 178, “Deprecating the X- Prefix and Similar Constructs in Application Protocols,” June 2012.</li><li><strong>[7]</strong> G. Klyne, M. Nottingham and J. Mogul, RFC 3864, “Registration Procedures for Message Header Fields,” September 2004.</li><li><strong>[8]</strong> T. Herr and J. Levine, RFC 9989, “Domain-Based Message Authentication, Reporting, and Conformance (DMARC),” 2026.</li><li><strong>[9]</strong> Thunderbird WebExtension API Documentation, compose and messages APIs, accessed August 2026.</li><li><strong>[10]</strong> D. Crocker, T. Hansen and M. Kucherawy, RFC 6376, “DomainKeys Identified Mail (DKIM) Signatures,” September 2011.</li><li><strong>[11]</strong> S. Kitterman, RFC 7208, “Sender Policy Framework (SPF) for Authorizing Use of Domains in Email, Version 1,” April 2014.</li><li><strong>[12]</strong> K. Andersen et al., RFC 8617, “The Authenticated Received Chain (ARC) Protocol,” July 2019.</li><li><strong>[13]</strong> A. Biryukov et al., RFC 9106, “Argon2 Memory-Hard Function for Password Hashing and Proof-of-Work Applications,” September 2021.</li><li><strong>[14]</strong> J. P. Lowery, “Softwar: A Novel Theory on Power Projection and the National Strategic Significance of Bitcoin,” Master's thesis, MIT System Design and Management Program, 2023.</li><li><strong>[15]</strong> S. Nakamoto, “Bitcoin: A Peer-to-Peer Electronic Cash System,” 2008.</li><li><strong>[16]</strong> Microsoft Office Add-ins documentation: internet headers on Outlook messages, Smart Alerts (OnMessageSend) and event-based activation, accessed August 2026.</li></ul>
+
+<footer class="colophon">
+  ESF — End Spam Forever. Rendered from <code>docs/whitepaper.md</code>, the canonical source (originally derived
+  from the v1.0 docx). Proof of work demonstrates computational effort — it is not sender authentication and not a
+  safety verdict.
+</footer>
+</div>
+</body>
+</html>
