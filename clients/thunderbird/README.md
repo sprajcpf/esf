@@ -58,6 +58,12 @@ address can test that guess, which is why Bcc stamps are opt-in (see below).
 
 ## Traffic light
 
+Worth saying plainly: the end state ESF aims at has **no user interface at all** — the verification result feeds the
+spam filtering that already decides where mail lands (whitepaper 4.2). The traffic light in this client exists
+because almost no mail carries a stamp yet and both receivers and implementers need to see what verification
+produced. Treat it as an adoption-phase affordance; the junk-flag setting below is the first step towards the
+filter-only end state.
+
 The colour is a policy result, not a cryptographic primitive (whitepaper 11):
 
 | Badge | Internal state | Meaning |
@@ -92,7 +98,7 @@ zip -r esf-thunderbird.zip manifest.json icons src
 ```bash
 npm test          # 148 unit tests, no dependencies, no network
 npm run vectors   # regenerate test/vectors.json
-npm run whitepaper  # re-render docs/whitepaper.html from docs/whitepaper.md
+npm run whitepaper  # re-render docs/whitepaper.html and .odt from docs/whitepaper.md
 npm run profile -- <dir>   # build a throwaway test profile with a seeded inbox
 ```
 

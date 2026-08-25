@@ -32,7 +32,7 @@ For ordinary users, the cryptography is deliberately abstracted away. A receiver
 | Section | Purpose |
 | --- | --- |
 | 1-3 | Problem, prior art, resource-security perspective and positioning |
-| 4-5 | Integrability First, Usability First and architecture |
+| 4-5 | Integrability, Usability and architecture |
 | 6-9 | ESF-Stamp, work profiles, policy and future SMTP enforcement |
 | 10-11 | Integration, automation and traffic-light UX |
 | 12-13 | Threat model, operations and environmental constraints |
@@ -78,18 +78,22 @@ Bitcoin is the most prominent large-scale operational example of Proof-of-Work. 
 
 This separation is important. A DMARC pass, for example, establishes authorized domain use but is not itself a guarantee that a message is desirable or safe; the current DMARC specification explicitly treats such results as inputs to broader receiver policy [8]. ESF follows the same principle: a valid stamp is evidence of work, not evidence of benevolent intent.
 ## 4. Design principles, goals and non-goals
-### 4.1 Integrability First
+### 4.1 Integrability
 ESF must fit into email as it exists. Adoption cannot depend on a coordinated flag day, replacement of SMTP, a central service, or simultaneous support by every mail provider. A useful implementation must be deployable at one integration point and still provide value when adjacent systems are unaware of ESF.
 
 The first deployment path is therefore deliberately additive: generate or verify a compact stamp in a mail client, webmail application, gateway or spam filter; transport the message through normal SMTP; and expose the result to existing filtering and policy engines. Server-to-server ESF negotiation is a later strengthening step, not a prerequisite.
 
 Implementations SHOULD keep the protocol core independent of any specific mail client or vendor so that the same test vectors and verification library can be reused by Thunderbird, Outlook integrations, webmail, MTAs, Rspamd, SpamAssassin and hosted email services.
-### 4.2 Usability First
-ESF should require almost no cryptographic knowledge from ordinary users. The primary user-facing concept is a traffic light, not a hash algorithm. Green means the message satisfies the receiver's ESF policy, yellow means a valid but weak or non-preferred proof is present, and red means no acceptable ESF proof is available.
+### 4.2 Usability
+The optimum is no user interface at all. ESF produces a signal for the machinery that already decides where mail lands: the verification result belongs in the existing spam score, filter rules and inbox placement, with nothing for the user to configure and nothing for them to interpret. A receiver who never learns that ESF exists, and whose unwanted mail merely became more expensive to send, is the success case. This also makes the strongest integration points - gateways, spam filters and hosted providers - the ones that need no user-facing work at all.
+
+During adoption, a visible indicator is still worth having. Almost no mail carries a stamp yet, receivers are still calibrating policy, and implementers need to see what verification actually produced. Early clients SHOULD therefore show the result, and MAY expose the underlying detail, while treating both as transitional rather than as the goal.
+
+Where an interface is shown, it must require almost no cryptographic knowledge. The user-facing concept is a traffic light, not a hash algorithm. Green means the message satisfies the receiver's ESF policy, yellow means a valid but weak or non-preferred proof is present, and red means no acceptable ESF proof is available.
 
 Algorithm, difficulty, memory cost, timestamp and verification details MAY be available under an Advanced or Details view for diagnostics and expert users, but they MUST NOT be required to understand or operate ESF.
 
-> **Two first-order requirements.** 1. Integrability: ESF must be incrementally deployable across existing email clients, servers and filters.<br>2. Usability: the normal user experience should be no more complex than green, yellow or red plus sensible automatic actions.
+> **Two first-order requirements.** 1. Integrability: ESF must be incrementally deployable across existing email clients, servers and filters.<br>2. Usability: ideally no user-visible surface at all, because the result feeds existing spam filtering; where something is shown, it must not exceed green, yellow or red plus sensible automatic actions.
 
 ### 4.3 Protocol and security goals
 Per-recipient cost: bulk delivery should scale approximately with the number of recipients, not only the number of unique message bodies.
@@ -336,7 +340,7 @@ Hosted providers can implement ESF at the server, in a web client using workers,
 ### 10.4 Mailing lists and forwarding
 Mailing lists intentionally fan one accepted submission out to many subscribers. Requiring the original author to precompute for unknown final subscribers is impractical and can expose membership. The list operator should instead be treated as a new sending actor: it can receive mail under its own policy and either be trusted by subscribers or generate outgoing ESF proofs per subscriber. Forwarders should preserve valid ESF-Stamp fields but receivers should assess them only for the recipient binding they can verify.
 ## 11. Receiver scoring and UX semantics
-The normal receiver experience should be immediate and low-friction. ESF deliberately uses a traffic-light model so users do not have to interpret algorithms, bit counts, memory parameters or cryptographic terminology.
+A receiver need not expose ESF at all; where the result only feeds spam scoring and inbox placement, this section does not apply (see 4.2). Where a receiver does surface ESF, the experience should be immediate and low-friction, so ESF deliberately uses a traffic-light model: users do not have to interpret algorithms, bit counts, memory parameters or cryptographic terminology.
 
 The visible color is a policy result, not a cryptographic primitive. Receiver software maps the underlying validation result and local policy to green, yellow or red.
 
