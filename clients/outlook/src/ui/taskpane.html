@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ESF — End Spam Forever</title>
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <link rel="stylesheet" href="taskpane.css" />
+</head>
+<body>
+  <main id="app">
+    <section id="status" class="status" hidden>
+      <div id="statusLight" class="light">…</div>
+      <h1 id="statusTitle">ESF</h1>
+      <p id="statusText"></p>
+      <button id="detailsToggle" class="linklike" hidden>Details</button>
+      <pre id="detailsPanel" class="details" hidden></pre>
+    </section>
+
+    <section id="composeInfo" class="status" hidden>
+      <div class="light">🛡️</div>
+      <h1>ESF protection</h1>
+      <p id="composeText"></p>
+    </section>
+
+    <section id="settings" class="settings">
+      <h2>Settings</h2>
+      <label class="row">
+        <span>Protect outgoing email</span>
+        <input type="checkbox" id="setEnabled" />
+      </label>
+      <label class="row">
+        <span>Protection level</span>
+        <select id="setDifficulty"></select>
+      </label>
+      <button id="advancedToggle" class="linklike">Advanced…</button>
+      <div id="advanced" hidden>
+        <label class="row">
+          <span>Time budget per recipient (s)</span>
+          <input type="number" id="setBudget" min="1" max="120" />
+        </label>
+        <label class="row">
+          <span>Minimum incoming difficulty</span>
+          <input type="number" id="setMinIncoming" min="1" max="30" />
+        </label>
+        <label class="row">
+          <span>Maximum stamp age (days)</span>
+          <input type="number" id="setMaxAge" min="1" max="365" />
+        </label>
+        <label class="row">
+          <span>If no proof can be made</span>
+          <select id="setOnFailure">
+            <option value="send-without">Send without ESF</option>
+            <option value="block">Hold the message</option>
+          </select>
+        </label>
+        <label class="row">
+          <span>Bcc recipients</span>
+          <select id="setBccMode">
+            <option value="omit">No stamp (private)</option>
+            <option value="token">Stamp with hidden token</option>
+          </select>
+        </label>
+        <label class="row column">
+          <span>My other addresses (one per line)</span>
+          <textarea id="setAliases" rows="2" spellcheck="false"></textarea>
+        </label>
+        <p id="capabilities" class="hint"></p>
+      </div>
+      <p id="saveState" class="hint"></p>
+    </section>
+  </main>
+  <script src="taskpane.js"></script>
+</body>
+</html>

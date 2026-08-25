@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>ESF event runtime</title>
+  <!-- Browser-based runtimes (Outlook on the web, new Outlook on Windows, Mac) load the event handler through this
+       page. Classic Outlook on Windows ignores it and loads launchevent.js directly via the manifest's
+       <Override type="javascript"> into its JavaScript-only runtime. -->
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="launchevent.js"></script>
+</head>
+<body></body>
+</html>

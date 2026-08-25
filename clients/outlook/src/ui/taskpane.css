@@ -1,0 +1,97 @@
+/* ESF task pane. Plain, small, and readable in every Outlook webview; no framework, no external assets. */
+
+:root {
+  color-scheme: light dark;
+  --green: #107c10;
+  --yellow: #b8860b;
+  --red: #c0392b;
+  --border: rgba(128, 128, 128, 0.35);
+}
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 14px;
+}
+
+main {
+  padding: 12px;
+  max-width: 480px;
+}
+
+.status {
+  text-align: center;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 12px;
+}
+
+.status .light {
+  font-size: 42px;
+  line-height: 1.1;
+}
+
+.status h1 {
+  font-size: 18px;
+  margin: 4px 0;
+}
+
+.status p {
+  margin: 4px 0;
+}
+
+.status.green h1 { color: var(--green); }
+.status.yellow h1 { color: var(--yellow); }
+.status.red h1 { color: var(--red); }
+
+.details {
+  text-align: left;
+  font-size: 12px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 8px;
+}
+
+.settings h2 {
+  font-size: 15px;
+  margin: 8px 0;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin: 6px 0;
+}
+
+.row.column {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.row select,
+.row input[type="number"] {
+  max-width: 160px;
+}
+
+.linklike {
+  background: none;
+  border: none;
+  color: #0f6cbd;
+  cursor: pointer;
+  padding: 0;
+  font-size: 13px;
+}
+
+.hint {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+textarea {
+  font-family: inherit;
+  font-size: 13px;
+}

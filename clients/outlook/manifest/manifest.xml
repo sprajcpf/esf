@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ESF Outlook add-in, add-in only (XML) manifest.
+
+  Why not the unified Microsoft 365 manifest: the unified manifest is not supported in Outlook on Mac or on mobile,
+  while this format runs everywhere event-based activation does. Revisit when Microsoft closes that gap.
+
+  URLs point at the local dev server (npm run build && npm run serve). For production deployment replace
+  https://localhost:3000 with the hosting origin; the OnMessageSend handler only runs when the add-in is deployed by
+  an administrator via the Microsoft 365 admin center (or acquired through a qualifying Marketplace listing).
+-->
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
+           xsi:type="MailApp">
+  <Id>7e0d8a3c-4f5b-4b9a-9c2e-1a6f2b8d4e71</Id>
+  <Version>0.1.0</Version>
+  <ProviderName>ESF Project</ProviderName>
+  <DefaultLocale>en-US</DefaultLocale>
+  <DisplayName DefaultValue="ESF - End Spam Forever"/>
+  <Description DefaultValue="Attaches a local Proof-of-Work stamp to outgoing email and verifies incoming stamps. Makes bulk spam expensive; legitimate email stays simple."/>
+  <IconUrl DefaultValue="https://localhost:3000/assets/icon-64.png"/>
+  <HighResolutionIconUrl DefaultValue="https://localhost:3000/assets/icon-128.png"/>
+  <SupportUrl DefaultValue="https://github.com/sprajcpf/esf"/>
+  <AppDomains>
+    <AppDomain>https://localhost:3000</AppDomain>
+  </AppDomains>
+  <Hosts>
+    <Host Name="Mailbox"/>
+  </Hosts>
+  <!-- Mailbox 1.8: internet headers (set on compose, read full MIME headers). This excludes Outlook mobile (declares
+       1.5); a separate mobile manifest with a MobileFormFactor and runtime feature checks is a documented later
+       phase, not faked here. -->
+  <Requirements>
+    <Sets>
+      <Set Name="Mailbox" MinVersion="1.8"/>
+    </Sets>
+  </Requirements>
+  <FormSettings>
+    <Form xsi:type="ItemRead">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
+        <RequestedHeight>320</RequestedHeight>
+      </DesktopSettings>
+    </Form>
+    <Form xsi:type="ItemEdit">
+      <DesktopSettings>
+        <SourceLocation DefaultValue="https://localhost:3000/taskpane.html"/>
+      </DesktopSettings>
+    </Form>
+  </FormSettings>
+  <!-- ReadWriteItem: required for internetHeaders.setAsync. No mailbox-wide permission is requested; the optional
+       categories feature (later phase) would need ReadWriteMailbox and stays off until then. -->
+  <Permissions>ReadWriteItem</Permissions>
+  <Rule xsi:type="RuleCollection" Mode="Or">
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Read"/>
+    <Rule xsi:type="ItemIs" ItemType="Message" FormType="Edit"/>
+  </Rule>
+  <DisableEntityHighlighting>false</DisableEntityHighlighting>
+
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides" xsi:type="VersionOverridesV1_0">
+    <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
+      <Requirements>
+        <bt:Sets DefaultMinVersion="1.8">
+          <bt:Set Name="Mailbox"/>
+        </bt:Sets>
+      </Requirements>
+      <Hosts>
+        <Host xsi:type="MailHost">
+          <!-- Shared runtime for event-based activation: browser runtimes load the HTML page, classic Outlook on
+               Windows loads only the JavaScript override into its JavaScript-only runtime. -->
+          <Runtimes>
+            <Runtime resid="EventRuntime.Url">
+              <Override type="javascript" resid="EventRuntimeJs.Url"/>
+            </Runtime>
+          </Runtimes>
+          <DesktopFormFactor>
+            <FunctionFile resid="EventRuntime.Url"/>
+            <ExtensionPoint xsi:type="MessageReadCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="esfReadGroup">
+                  <Label resid="Group.Label"/>
+                  <Control xsi:type="Button" id="esfReadOpen">
+                    <Label resid="ReadButton.Label"/>
+                    <Supertip>
+                      <Title resid="ReadButton.Label"/>
+                      <Description resid="ReadButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16"/>
+                      <bt:Image size="32" resid="Icon.32"/>
+                      <bt:Image size="80" resid="Icon.80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+            <ExtensionPoint xsi:type="MessageComposeCommandSurface">
+              <OfficeTab id="TabDefault">
+                <Group id="esfComposeGroup">
+                  <Label resid="Group.Label"/>
+                  <Control xsi:type="Button" id="esfComposeOpen">
+                    <Label resid="ComposeButton.Label"/>
+                    <Supertip>
+                      <Title resid="ComposeButton.Label"/>
+                      <Description resid="ComposeButton.Tooltip"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16"/>
+                      <bt:Image size="32" resid="Icon.32"/>
+                      <bt:Image size="80" resid="Icon.80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>
+                    </Action>
+                  </Control>
+                </Group>
+              </OfficeTab>
+            </ExtensionPoint>
+            <!-- Smart Alerts, Mailbox 1.12+. SendMode PromptUser: if ESF blocks the send (onSendFailure "block"),
+                 the user still gets "Send Anyway" - and PromptUser keeps the add-in publishable to the Marketplace,
+                 which SendMode Block would not. -->
+            <ExtensionPoint xsi:type="LaunchEvent">
+              <LaunchEvents>
+                <LaunchEvent Type="OnMessageSend" FunctionName="onMessageSendHandler" SendMode="PromptUser"/>
+              </LaunchEvents>
+              <SourceLocation resid="EventRuntime.Url"/>
+            </ExtensionPoint>
+          </DesktopFormFactor>
+        </Host>
+      </Hosts>
+      <Resources>
+        <bt:Images>
+          <bt:Image id="Icon.16" DefaultValue="https://localhost:3000/assets/icon-16.png"/>
+          <bt:Image id="Icon.32" DefaultValue="https://localhost:3000/assets/icon-32.png"/>
+          <bt:Image id="Icon.80" DefaultValue="https://localhost:3000/assets/icon-80.png"/>
+        </bt:Images>
+        <bt:Urls>
+          <bt:Url id="Taskpane.Url" DefaultValue="https://localhost:3000/taskpane.html"/>
+          <bt:Url id="EventRuntime.Url" DefaultValue="https://localhost:3000/launchevent.html"/>
+          <bt:Url id="EventRuntimeJs.Url" DefaultValue="https://localhost:3000/launchevent.js"/>
+        </bt:Urls>
+        <bt:ShortStrings>
+          <bt:String id="Group.Label" DefaultValue="ESF"/>
+          <bt:String id="ReadButton.Label" DefaultValue="ESF status"/>
+          <bt:String id="ComposeButton.Label" DefaultValue="ESF"/>
+        </bt:ShortStrings>
+        <bt:LongStrings>
+          <bt:String id="ReadButton.Tooltip" DefaultValue="Check the ESF Proof-of-Work status of this email."/>
+          <bt:String id="ComposeButton.Tooltip" DefaultValue="ESF protection status and settings for outgoing email."/>
+        </bt:LongStrings>
+      </Resources>
+    </VersionOverrides>
+  </VersionOverrides>
+</OfficeApp>
