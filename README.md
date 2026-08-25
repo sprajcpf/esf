@@ -14,13 +14,14 @@ proposal, and a technical whitepaper.
 
 | Document | |
 |---|---|
-| [Technical Whitepaper (Markdown)](docs/whitepaper.md) | **Canonical source.** Problem, prior art, architecture, the ESF-Stamp protocol, work profiles, policy, threat model, roadmap, RFC path, and Appendix D with the reference-client learnings |
-| [Technical Whitepaper (HTML)](docs/whitepaper.html) | Rendered for reading and printing |
-| [Technical Whitepaper (ODT)](docs/whitepaper.odt) | Rendered as an editable ODF text document |
-| [Technical Whitepaper (DOCX)](docs/whitepaper.docx) | The original v1.0 document the Markdown was derived from |
+| [Technical Whitepaper (Markdown)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.md) | **Canonical source.** Problem, prior art, architecture, the ESF-Stamp protocol, work profiles, policy, threat model, roadmap, RFC path, and Appendix D with the reference-client learnings |
+| [Technical Whitepaper (HTML)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.html) | Rendered for reading and printing |
+| [Technical Whitepaper (ODT)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.odt) | Rendered as an editable ODF text document |
+| [Technical Whitepaper (DOCX)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.docx) | Rendered as a Word document |
 
-The HTML and ODT renders are generated from the Markdown, dependency-free:
-`cd clients/thunderbird && npm run whitepaper`.
+All three renders are generated from the Markdown and then checked against it, dependency-free:
+`cd clients/thunderbird && npm run whitepaper`. The check compares headings, tables, code blocks and key wording, so
+a format cannot silently drift out of sync again.
 
 ## Clients
 

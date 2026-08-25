@@ -6,9 +6,11 @@
   "description": "ESF \u2014 End-Spam-Forever: Proof-of-Work MailExtension for Thunderbird",
   "scripts": {
     "test": "node --test \"test/**/*.test.mjs\"",
+    "package": "node tools/package.mjs",
     "vectors": "node tools/generate-vectors.mjs",
-    "whitepaper": "node tools/render-whitepaper.mjs && node tools/render-whitepaper-odt.mjs",
-    "profile": "node tools/make-test-profile.mjs"
+    "whitepaper": "node tools/render-whitepaper.mjs && node tools/render-whitepaper-odt.mjs && node tools/render-whitepaper-docx.mjs && node tools/check-whitepaper.mjs",
+    "profile": "node tools/make-test-profile.mjs",
+    "check:whitepaper": "node tools/check-whitepaper.mjs"
   },
   "engines": {
     "node": ">=20"

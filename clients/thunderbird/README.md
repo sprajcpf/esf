@@ -4,7 +4,7 @@ A Thunderbird MailExtension that mints an **ESF-Stamp** (proof of work) for ever
 and verifies incoming stamps, showing the result as a green / yellow / red traffic light.
 
 This is the *Phase 1 client prototype* of the ESF deployment roadmap: see
-[`docs/whitepaper.md`](../../docs/whitepaper.md) ([HTML](../../docs/whitepaper.html)) for the protocol it implements.
+[`docs/ESF_End_Spam_Forever_Technical_Whitepaper.md`](../../docs/ESF_End_Spam_Forever_Technical_Whitepaper.md) ([HTML](../../docs/ESF_End_Spam_Forever_Technical_Whitepaper.html)) for the protocol it implements.
 
 > **Proof of work is not authentication.** A valid stamp proves that measurable computing time was spent for a
 > specific recipient. It says nothing about *who* sent the message, whether the content is safe, or whether the mail
@@ -85,21 +85,27 @@ Requires **Thunderbird 128 or newer** (Manifest V3). Verified on Thunderbird 153
 2. **Load Temporary Add-on…**
 3. select `manifest.json` in this directory
 
-For a permanent install, zip the contents (with `manifest.json` at the archive root) and install the `.zip`/`.xpi`
-via Add-ons Manager → gear icon → *Install Add-on From File*. Unsigned add-ons need
-`xpinstall.signatures.required = false` in the Config Editor.
+For a permanent install, build the package and install it via Add-ons Manager → gear icon → *Install Add-on From
+File*. Unsigned add-ons need `xpinstall.signatures.required = false` in the Config Editor.
 
 ```bash
-zip -r esf-thunderbird.zip manifest.json icons src
+npm run package                              # -> dist/esf-thunderbird-<version>.xpi
+npm run package -- --out ~/Downloads         # or straight into a directory of your choice
 ```
+
+`tools/package.mjs` writes the archive itself rather than shelling out to a zip tool: entry names are always
+forward-slashed (PowerShell's `Compress-Archive` writes backslashes, which Thunderbird cannot read) and timestamps
+are fixed, so the same sources always produce a byte-identical `.xpi`.
 
 ## Development
 
 ```bash
-npm test          # 148 unit tests, no dependencies, no network
-npm run vectors   # regenerate test/vectors.json
-npm run whitepaper  # re-render docs/whitepaper.html and .odt from docs/whitepaper.md
-npm run profile -- <dir>   # build a throwaway test profile with a seeded inbox
+npm test                    # 148 unit tests, no dependencies, no network
+npm run package             # build the installable .xpi
+npm run vectors             # regenerate test/vectors.json
+npm run whitepaper          # re-render the whitepaper HTML, ODT and DOCX from the Markdown, then verify them
+npm run check:whitepaper    # verify the renders match the Markdown without re-rendering
+npm run profile -- <dir>    # build a throwaway test profile with a seeded inbox
 ```
 
 The whole of `src/protocol/` is free of Thunderbird APIs, so the protocol runs and is tested in plain Node ≥ 20 —

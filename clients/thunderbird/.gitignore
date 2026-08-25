@@ -3,3 +3,4 @@ node_modules/
 *.xpi
 .DS_Store
 web-ext-artifacts/
+dist/
