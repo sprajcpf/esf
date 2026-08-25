@@ -26,11 +26,19 @@ The HTML and ODT renders are generated from the Markdown, dependency-free:
 
 | Client | Status | Summary |
 |---|---|---|
-| [Thunderbird](clients/thunderbird/) | Working prototype — Manifest V3, Thunderbird 128+, verified on 153 | Mints one `X-ESF-Stamp` per recipient on send, verifies incoming stamps, green/yellow/red traffic light, 148 unit tests plus shared test vectors |
+| [Thunderbird](clients/thunderbird/) | Working prototype — MailExtension, Manifest V3, Thunderbird 128+, verified on 153 | Mints one stamp per recipient in `compose.onBeforeSend`, verifies on display, traffic light on the message button, 148 unit tests |
+| [Outlook](clients/outlook/) | Working prototype — Office.js add-in, Mailbox 1.12+ (Web, new and classic Windows, Mac) | Mints stamps in `OnMessageSend` before Outlook releases the mail, reads stamps from the internet-header block, traffic light in the task pane, 22 unit tests |
 
-A client's protocol core (`clients/thunderbird/src/protocol/`) is deliberately free of client-specific APIs, so the
-same implementation and the same [test vectors](clients/thunderbird/test/vectors.json) can be reused by other mail
-clients, gateways and filters — an explicit requirement of the whitepaper (section 4.1).
+Both clients run the **same protocol core** — `clients/thunderbird/src/protocol/`, which is free of any client API
+usage — and both check the same [test vectors](clients/thunderbird/test/vectors.json), so a stamp minted by one
+verifies in the other. The whitepaper asks for exactly that (section 4.1): one reusable core and one set of vectors
+for every client, gateway and filter, with no client-specific protocol variants.
+
+Platform notes worth knowing before picking a client: Outlook's send hook needs Mailbox requirement set 1.12, is not
+available on Outlook mobile at all, and the automatic variant needs admin deployment; classic Outlook on Windows runs
+event handlers in a JavaScript-only runtime, so that entry point ships as a self-contained bundle. Thunderbird has no
+such restriction, but folds all stamps of a message into one header field because its `customHeaders` API keeps only
+one field per name. Details are in each client's README and in the whitepaper's Appendix D.
 
 ## The stamp in one glance
 
