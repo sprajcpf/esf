@@ -34,23 +34,38 @@
         <span>Baseline difficulty</span>
         <select name="outgoingDifficulty">
           <option value="0">Disabled</option>
-          <option value="18">18 bits</option>
+          <option value="18">18 bits (default)</option>
           <option value="20">20 bits</option>
-          <option value="22">22 bits (default)</option>
+          <option value="22">22 bits</option>
           <option value="24">24 bits</option>
           <option value="26">26 bits</option>
         </select>
       </label>
 
       <label>
-        <span>Maximum computation time per recipient</span>
+        <span>Compute quietly for</span>
         <span class="inline"><input type="number" name="maxComputeSeconds" min="1" max="120" step="1"> seconds</span>
       </label>
+      <p class="hint indent">
+        Most sends finish inside this and you never notice ESF at all. Afterwards the search <em>keeps running</em> —
+        the toolbar button just starts showing progress. With ESF enabled a message is meant to carry a stamp, so it
+        is not abandoned here.
+      </p>
 
       <label>
-        <span>When the time limit is reached</span>
+        <span>Ask me if it takes longer than</span>
+        <span class="inline"><input type="number" name="askAfterSeconds" min="2" max="600" step="1"> seconds</span>
+      </label>
+      <p class="hint indent">
+        The emergency exit, reached only on a slow machine or a high difficulty. Work is exponential: at 18 bits a
+        second is usually enough, 22 bits needs about fifteen. <em>Measure my hash rate</em> below shows what your
+        machine actually manages.
+      </p>
+
+      <label>
+        <span>When that happens</span>
         <select name="onTimeout">
-          <option value="ask">Ask me</option>
+          <option value="ask">Ask me: keep going, send without, or cancel (default)</option>
           <option value="send-without">Send without a stamp</option>
           <option value="cancel">Cancel the send</option>
         </select>
@@ -72,7 +87,7 @@
         <span>Worker threads</span>
         <span class="inline">
           <input type="number" name="maxWorkers" min="0" max="32" step="1">
-          <small>0 = automatic: min(2, cores − 1)</small>
+          <small>0 = automatic: min(4, cores − 2)</small>
         </span>
       </label>
 
@@ -87,8 +102,18 @@
 
       <label>
         <span>Accept stamps up to</span>
-        <span class="inline"><input type="number" name="maxStampAgeDays" min="1" max="365" step="1"> days old</span>
+        <span class="inline">
+          <input type="number" name="maxStampAgeDays" min="0" max="3650" step="1"> days old
+          <small>0 = never expires</small>
+        </span>
       </label>
+      <p class="hint indent">
+        Default: stamps do not expire — work stays work, and a result that silently turned red after a week would be
+        confusing on stored mail. A window makes a sender keep spending instead of minting stamps for months on idle
+        hardware and dumping them in one campaign; it is only worth setting if that matters to you. Either way,
+        freshness is measured against the message's own date, so your archive never goes stale, and a stamp reused on
+        a second message is still refused as a replay.
+      </p>
 
       <label>
         <span>Minimum difficulty for a green result</span>

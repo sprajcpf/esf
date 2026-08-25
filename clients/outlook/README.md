@@ -55,7 +55,7 @@ Platform constraints this implementation is built around:
   returned by `getAllInternetHeadersAsync` (folded lines are unfolded, both `ESF-Stamp` and `X-ESF-Stamp` accepted).
 - **`OnMessageSend` needs Mailbox 1.12+** and does not run on Outlook mobile. Event-based add-ins have a runtime
   limit of ~5 minutes and show a "taking long" dialog after ~5 seconds — the per-recipient compute budget
-  (default 5 s) keeps ESF far below both.
+  (default 1 s) keeps ESF far below both.
 - **Classic Outlook on Windows runs event handlers in a JavaScript-only runtime**: no DOM, no `Office.onReady`, no
   module imports, exactly one script file. `dist/launchevent.js` is therefore a self-contained IIFE bundle, and the
   shared core's SHA-256 falls back to the bundled pure-JS implementation when `crypto.subtle` is absent. If

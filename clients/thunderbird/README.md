@@ -15,7 +15,9 @@ This is the *Phase 1 client prototype* of the ESF deployment roadmap: see
 ## What it does
 
 - **Outgoing:** hooks `compose.onBeforeSend`, mints one stamp per recipient off the UI thread, and attaches them as
-  a single `X-ESF-Stamp` header field. Cancellable, with a configurable time budget.
+  a single `X-ESF-Stamp` header field. With ESF enabled a message is meant to *carry* a stamp, so the search runs in
+  two stages: quiet for the first second, then visibly (still running, never abandoned), and only after the patience
+  threshold does it ask whether to keep going, send without, or cancel.
 - **Incoming:** verifies every stamp of a displayed message against your own mailboxes and shows the traffic light
   on the message-display button, with details behind a disclosure.
 - **Optional:** feed a red result into Thunderbird's junk flag (off by default).
@@ -72,7 +74,7 @@ The colour is a policy result, not a cryptographic primitive (whitepaper 11):
 | yellow `~` | `weak` | Real work, but below your configured minimum |
 | yellow `~` | `unsupported` | A registered ESF profile this client does not implement (e.g. argon2id) — never executed |
 | red `–` | `missing` | No stamp. Almost no mail carries one today; this is **not** evidence of abuse |
-| red `!` | `invalid` | Malformed, stale, future-dated, wrong recipient, insufficient or replayed |
+| red `!` | `invalid` | Malformed, future-dated, wrong recipient, insufficient, replayed — or stale, if you set an expiry |
 
 `missing` and `invalid` share the red light but stay distinct internally, because automation must be able to tell a
 legacy sender from a forged stamp.
@@ -207,21 +209,27 @@ TB 153, so the page form is used deliberately.
 ## Performance
 
 - The nonce search never runs on the UI thread. Workers take disjoint shards (`start + k·stride`).
-- Default worker count is `min(2, cores − 1)`: never every core (whitepaper 13).
+- Default worker count is `min(4, cores − 2)`: shards shorten the wait proportionally, but the machine keeps two
+  cores for Thunderbird and everything else (whitepaper 13).
 - Cancellation is `worker.terminate()` — CPU work stops in the same tick, not at the next checkpoint.
 - Verification is one hash per stamp, at most 8 header fields and 16 stamps per message, with per-message caching.
+- Freshness is judged against the message's own date, not the moment it is opened, so an archived message keeps the
+  verdict it had on arrival instead of turning red weeks later.
 - *Measure my hash rate* in the options turns local throughput into expected durations per difficulty.
 
-Rough guide at ~270k hashes/s per worker with 2 workers — expected values, and the search is memoryless, so
-individual sends vary widely:
+Difficulty and the time budget belong together, because work is exponential. Measured inside Thunderbird at roughly
+300k hashes/s across two workers (four shards on a machine with cores to spare roughly halves these times):
 
-| Difficulty | Expected hashes | Expected time |
-|---|---|---|
-| 18 bits | 262 k | ~0.5 s |
-| 20 bits | 1.0 M | ~2 s |
-| 22 bits | 4.2 M | ~8 s |
-| 24 bits | 16.8 M | ~31 s |
-| 26 bits | 67 M | ~2 min |
+| Difficulty | Expected hashes | Expected time | Stamped within a 1 s budget |
+|---|---|---|---|
+| 18 bits | 262 k | ~0.9 s | ~68 % |
+| 20 bits | 1.0 M | ~3.5 s | ~25 % |
+| 22 bits | 4.2 M | ~14 s | ~7 % |
+| 24 bits | 16.8 M | ~56 s | ~2 % |
+
+The search is memoryless, so the *expected* time says little about a single send: one message may be stamped in
+200 ms and the next not at all. That is why the default pairs 18 bits with a one-second budget and sends unstamped
+when the budget runs out — rather than making the user wait for an average.
 
 ## Privacy
 

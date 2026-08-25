@@ -9,9 +9,18 @@ export const DEFAULTS = Object.freeze({
   enabled: true,
   /** Baseline outgoing difficulty in leading zero bits; 0 disables generation. */
   outgoingDifficulty: DEFAULT_DIFFICULTY,
-  /** Wall-clock budget per recipient before the user is asked what to do. */
-  maxComputeSeconds: 5,
-  /** Incoming stamps older than this are rejected (whitepaper 6.7 step 5). */
+  /**
+   * Quiet phase per recipient, in seconds. Most sends finish inside it and nothing is shown at all. When it passes,
+   * the search keeps running and the compose button starts showing progress - it does not give up, because an
+   * enabled ESF is expected to actually produce a stamp.
+   */
+  maxComputeSeconds: 1,
+  /**
+   * When to fall back on asking, in seconds. Only reached on a slow machine or a high difficulty; up to here the
+   * add-on keeps working silently rather than bothering anyone.
+   */
+  askAfterSeconds: 15,
+  /** Incoming stamps older than this are rejected; 0 means they never expire (the default). */
   maxStampAgeDays: DEFAULT_MAX_AGE_DAYS,
   /** Below this difficulty a valid stamp counts as weak/yellow rather than strong/green. */
   minIncomingDifficulty: 18,
@@ -26,9 +35,13 @@ export const DEFAULTS = Object.freeze({
   trustAwareDifficulty: false,
   /** Bcc handling: "omit" (whitepaper fallback) or "token" (include the salted rid). */
   bccMode: "omit",
-  /** 0 means auto: min(2, cores - 1). Never consume every core by default (whitepaper 13). */
+  /** 0 means auto: min(4, cores - 2). Never consume every core by default (whitepaper 13). */
   maxWorkers: 0,
-  /** What to do when the compute budget is exhausted: "ask" | "send-without" | "cancel". */
+  /**
+   * What to do once askAfterSeconds is reached: "ask" | "send-without" | "cancel". Default "ask": with ESF enabled a
+   * message is meant to carry a stamp, so giving up silently is the wrong default - but the question only comes up
+   * after the add-on has genuinely run out of patience.
+   */
   onTimeout: "ask",
   debugLogging: false
 });
@@ -64,7 +77,8 @@ export function normalizeSettings(raw) {
       ? outgoingDifficulty
       : DEFAULTS.outgoingDifficulty,
     maxComputeSeconds: clamp(Number(input.maxComputeSeconds), 1, 120, DEFAULTS.maxComputeSeconds),
-    maxStampAgeDays: clamp(Number(input.maxStampAgeDays), 1, 365, DEFAULTS.maxStampAgeDays),
+    askAfterSeconds: clamp(Number(input.askAfterSeconds), 2, 600, DEFAULTS.askAfterSeconds),
+    maxStampAgeDays: clamp(Number(input.maxStampAgeDays), 0, 3650, DEFAULTS.maxStampAgeDays),
     minIncomingDifficulty: clamp(Number(input.minIncomingDifficulty), 1, 30, DEFAULTS.minIncomingDifficulty),
     maxWorkers: clamp(Number(input.maxWorkers), 0, 32, DEFAULTS.maxWorkers),
     showBadge: input.showBadge !== false,
@@ -84,7 +98,7 @@ function clamp(value, min, max, fallback) {
 }
 
 /**
- * Number of workers for a nonce search. Leaves at least one core to Thunderbird itself.
+ * Number of workers for a nonce search. Never takes the whole machine.
  *
  * @param {typeof DEFAULTS} settings
  * @param {number} [concurrency]
@@ -93,7 +107,9 @@ export function resolveWorkerCount(settings, concurrency = globalThis.navigator?
   if (settings.maxWorkers > 0) {
     return Math.max(1, Math.min(settings.maxWorkers, concurrency));
   }
-  return Math.max(1, Math.min(2, concurrency - 1));
+  // Up to four shards, always leaving two cores to Thunderbird and the rest of the machine (whitepaper 13). More
+  // shards shorten the wait proportionally, which is what makes a one-second budget worth having.
+  return Math.max(1, Math.min(4, concurrency - 2));
 }
 
 /** Registers a callback invoked whenever settings change in any extension context. */

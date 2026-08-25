@@ -3,7 +3,14 @@
  * (whitepaper 6.7, 6.8).
  */
 
-import { ACCEPTED_HEADER_NAMES, MAX_DECLARED_DIFFICULTY, Reason, Signal, StampState } from "../protocol/constants.js";
+import {
+  ACCEPTED_HEADER_NAMES,
+  MAX_DECLARED_DIFFICULTY,
+  REPLAY_RETENTION_DAYS,
+  Reason,
+  Signal,
+  StampState
+} from "../protocol/constants.js";
 import { receiverPolicy } from "../protocol/policy.js";
 import { stampId, verifyMessageStamps } from "../protocol/verifier.js";
 import { canonicalMailbox } from "../protocol/stamp.js";
@@ -71,8 +78,14 @@ export class VerificationService {
       // The stamp binds the identifier the sender minted (see composeSigner), so the carrier Message-ID is only used
       // when the sender bound the real one. Passing it unconditionally would reject every prototype stamp.
       messageId: undefined,
-      now: Date.now(),
-      maxAgeMs: settings.maxStampAgeDays * 24 * 60 * 60 * 1000,
+      // Freshness is judged against the message's own date, not against the moment it happens to be opened.
+      // Verifying at display time against Date.now() would turn every archived message stale, flipping a result
+      // that was green on arrival to red weeks later.
+      now: freshnessReference(message),
+      // 0 days means a stamp never expires, which is the default.
+      maxAgeMs: settings.maxStampAgeDays > 0
+        ? settings.maxStampAgeDays * 24 * 60 * 60 * 1000
+        : Number.POSITIVE_INFINITY,
       maxDifficulty: MAX_DECLARED_DIFFICULTY,
       minDifficulty: policy.minDifficulty("sha256"),
       requireSenderBinding: false
@@ -94,7 +107,7 @@ export class VerificationService {
     if (result.state === StampState.STRONG || result.state === StampState.WEAK) {
       const key = await stampId(outcome.best.stamp);
       const messageKey = message.headerMessageId || `id:${message.id}`;
-      if (await this.#seenElsewhere(key, messageKey, settings)) {
+      if (await this.#seenElsewhere(key, messageKey)) {
         result = { ...result, state: StampState.INVALID, signal: Signal.RED, reason: Reason.REPLAY };
       }
     }
@@ -137,7 +150,7 @@ export class VerificationService {
    * Records a stamp and reports whether it was already seen on a *different* message. Re-opening the same message is
    * not a replay.
    */
-  async #seenElsewhere(key, messageKey, settings) {
+  async #seenElsewhere(key, messageKey) {
     const stored = await browser.storage.local.get(REPLAY_STORE_KEY);
     const ledger = stored[REPLAY_STORE_KEY] && typeof stored[REPLAY_STORE_KEY] === "object"
       ? stored[REPLAY_STORE_KEY]
@@ -148,8 +161,8 @@ export class VerificationService {
     }
     if (!existing) {
       ledger[key] = { messageKey, seenAt: Date.now() };
-      // Entries only need to outlive the freshness window (whitepaper 6.8).
-      const horizon = Date.now() - settings.maxStampAgeDays * 24 * 60 * 60 * 1000;
+      // Without an acceptance window the ledger cannot follow it, so retention is its own bounded value.
+      const horizon = Date.now() - REPLAY_RETENTION_DAYS * 24 * 60 * 60 * 1000;
       for (const [entryKey, entry] of Object.entries(ledger)) {
         if ((entry.seenAt || 0) < horizon) {
           delete ledger[entryKey];
@@ -191,6 +204,23 @@ export class VerificationService {
       return false;
     }
   }
+}
+
+/**
+ * Reference instant for the freshness check: the message's own date, never later than now.
+ *
+ * The date is sender-controlled, so this trades a little strictness for correctness on stored mail. What it cannot
+ * be used for is smuggling a stale stamp past the check, because a message claiming to be old also *presents* as
+ * old, the stamp is still bound to one recipient, and the replay ledger still refuses a second use.
+ *
+ * @param {{date?: Date|string|number}} message a MessageHeader
+ * @param {number} [now]
+ * @returns {number} milliseconds since the epoch
+ */
+export function freshnessReference(message, now = Date.now()) {
+  const raw = message && message.date;
+  const stamped = raw instanceof Date ? raw.getTime() : Number(new Date(raw ?? Number.NaN));
+  return Number.isFinite(stamped) ? Math.min(stamped, now) : now;
 }
 
 /** Collects every accepted stamp header field (X-ESF-Stamp and the standards-track ESF-Stamp). */

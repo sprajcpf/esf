@@ -27,6 +27,9 @@ import { createLogger } from "../utils/log.js";
 
 const log = createLogger("compose");
 
+/** How often to keep computing when the user cannot be asked, before giving up on the stamp. */
+const MAX_UNANSWERED_ASKS = 3;
+
 /** Phases reported to the compose popup. */
 export const ComposePhase = {
   IDLE: "idle",
@@ -206,13 +209,17 @@ export class ComposeSigner {
           profileParams: {}
         };
         const workBase = buildWorkBase(stamp);
-        const budgetMs = settings.maxComputeSeconds * 1000;
-        // Resuming after a timeout must continue behind the range already searched; restarting at 0 would retry the
-        // very same candidates and time out again forever.
+        // Two stages, because an enabled ESF is expected to produce a stamp: the search runs silently for the quiet
+        // phase, then keeps running while the compose button shows progress, and only asks once patience runs out.
+        const quietMs = settings.maxComputeSeconds * 1000;
+        const askAfterMs = Math.max(quietMs, settings.askAfterSeconds * 1000);
+        // Resuming must continue behind the range already searched; restarting at 0 would retry the very same
+        // candidates and run out of time again forever.
         let startOffset = 0;
+        let refusedAsks = 0;
         let outcome = await this.#solveWithBudget({
-          tabId, workBase, difficulty, workerCount, budgetMs, signal: controller.signal, baseHashes: hashesTotal,
-          index, startOffset
+          tabId, workBase, difficulty, workerCount, budgetMs: askAfterMs, quietMs, signal: controller.signal,
+          baseHashes: hashesTotal, index, startOffset
         });
 
         while (outcome.timedOut) {
@@ -227,10 +234,20 @@ export class ComposeSigner {
             this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "timeout" });
             return { details: { customHeaders: keptHeaders } };
           }
-          this.#setState(tabId, { phase: ComposePhase.COMPUTING });
+          if (decision === "unavailable") {
+            // The question could not be put to the user. Keep working rather than dropping the stamp silently, but
+            // do not retry forever - a send has to end.
+            refusedAsks++;
+            if (refusedAsks > MAX_UNANSWERED_ASKS) {
+              log.error("cannot ask the user and out of patience; sending without a stamp");
+              this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "cannot-ask" });
+              return { details: { customHeaders: keptHeaders } };
+            }
+          }
+          this.#setState(tabId, { phase: ComposePhase.COMPUTING, overBudget: true });
           outcome = await this.#solveWithBudget({
-            tabId, workBase, difficulty, workerCount, budgetMs, signal: controller.signal, baseHashes: hashesTotal,
-            index, startOffset
+            tabId, workBase, difficulty, workerCount, budgetMs: askAfterMs, quietMs, signal: controller.signal,
+            baseHashes: hashesTotal, index, startOffset
           });
         }
 
@@ -270,10 +287,16 @@ export class ComposeSigner {
     return { details: { customHeaders: [...keptHeaders, header] } };
   }
 
-  /** Runs one search with a wall-clock budget. A timeout keeps the progress and returns for a decision. */
-  async #solveWithBudget({ tabId, workBase, difficulty, workerCount, budgetMs, signal, baseHashes, index,
+  /**
+   * Runs one search until it succeeds or `budgetMs` runs out. After `quietMs` the state flips to "over budget", so
+   * the compose button can show that something is still happening - the search itself is not interrupted there.
+   */
+  async #solveWithBudget({ tabId, workBase, difficulty, workerCount, budgetMs, quietMs, signal, baseHashes, index,
     startOffset }) {
     const deadline = deadlineSignal(budgetMs);
+    const quiet = quietMs && quietMs < budgetMs
+      ? setTimeout(() => this.#setState(tabId, { phase: ComposePhase.COMPUTING, overBudget: true }), quietMs)
+      : null;
     const result = await this.solver.solve({
       workBase,
       difficulty,
@@ -284,6 +307,9 @@ export class ComposeSigner {
     });
     const timedOut = deadline.fired && !result.found && !signal.aborted;
     deadline.clear();
+    if (quiet) {
+      clearTimeout(quiet);
+    }
     return { ...result, timedOut };
   }
 
@@ -295,8 +321,9 @@ export class ComposeSigner {
     return new Promise(resolve => {
       this.pendingDecisions.set(tabId, resolve);
       this.askUser(tabId).catch(error => {
-        log.warn("cannot open the compose popup, falling back to send-without", error);
-        this.resolveDecision(tabId, "send-without");
+        // Never turn "I could not ask" into "sent without a stamp" here: the caller decides how long to keep going.
+        log.warn("cannot open the compose popup to ask", error);
+        this.resolveDecision(tabId, "unavailable");
       });
     });
   }

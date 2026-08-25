@@ -12,6 +12,7 @@ let composeTabId = null;
 const PHASE_TEXT = {
   idle: "Ready — a stamp is minted when you send",
   computing: "Calculating proof of work…",
+  "computing-over": "Still calculating — this is taking longer than usual",
   asking: "Still calculating — what should happen?",
   done: "ESF stamp attached",
   skipped: "Sent without an ESF stamp",
@@ -19,6 +20,7 @@ const PHASE_TEXT = {
 };
 
 const PHASE_CLASS = {
+  "computing-over": "yellow",
   done: "green",
   skipped: "yellow",
   cancelled: "red",
@@ -39,8 +41,9 @@ function row(term, value) {
 }
 
 function render(state, settings) {
-  statusEl.className = `status ${PHASE_CLASS[state.phase] || ""}`;
-  statusText.textContent = PHASE_TEXT[state.phase] || state.phase;
+  const phase = state.phase === "computing" && state.overBudget ? "computing-over" : state.phase;
+  statusEl.className = `status ${PHASE_CLASS[phase] || ""}`;
+  statusText.textContent = PHASE_TEXT[phase] || state.phase;
 
   detailsEl.textContent = "";
   const difficulty = state.difficulty || (settings && settings.outgoingDifficulty) || 0;

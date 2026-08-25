@@ -33,7 +33,13 @@ export const KNOWN_ALGORITHMS = new Set([ALGORITHM_SHA256, ALGORITHM_ARGON2ID]);
 
 /** Difficulty offered in the options UI. 0 disables generation. */
 export const SELECTABLE_DIFFICULTY = [0, 18, 20, 22, 24, 26];
-export const DEFAULT_DIFFICULTY = 22;
+/**
+ * Default difficulty. Whitepaper 7.1 is explicit that a fixed global number is a prototype convenience, not policy,
+ * so this is chosen to fit the default one-second compute budget: measured inside Thunderbird at roughly 300k
+ * hashes/s across two workers, 18 bits completes within a second about two thirds of the time, while 22 bits would
+ * only make it in about one send in fourteen - which would leave almost every message unstamped.
+ */
+export const DEFAULT_DIFFICULTY = 18;
 
 /**
  * Verification bounds. Difficulty is declared by an untrusted sender, so the verifier applies its own bounds and
@@ -53,9 +59,22 @@ export const MIN_SALT_HEX = 16;
 export const MAX_SALT_HEX = 64;
 export const TOKEN_LENGTH = 43; // BASE64URL of a 32 byte digest, unpadded
 
-/** Freshness (whitepaper 6.7 step 5). */
+/**
+ * Freshness (whitepaper 6.7 step 5).
+ *
+ * A stamp does not expire by default: a proof of work stays a proof of work, and a valid result that silently turns
+ * red after a week is confusing and makes stored mail unverifiable. A receiver can still opt into a window, which is
+ * what the whitepaper's DNS `maxage` tag advertises. See NO_EXPIRY.
+ */
 export const MAX_CLOCK_SKEW_MS = 60 * 60 * 1000;
-export const DEFAULT_MAX_AGE_DAYS = 7;
+export const NO_EXPIRY = 0;
+export const DEFAULT_MAX_AGE_DAYS = NO_EXPIRY;
+
+/**
+ * How long the replay ledger remembers a stamp. With no acceptance window this can no longer follow it, so it is a
+ * separate, explicit retention: replay detection is exact within it and best-effort beyond.
+ */
+export const REPLAY_RETENTION_DAYS = 180;
 
 /** Salt size in bytes. Whitepaper 6.2: at least 64 bits, 128 recommended. */
 export const SALT_BYTES = 16;

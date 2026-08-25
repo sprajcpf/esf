@@ -13,8 +13,12 @@ export const DEFAULTS = Object.freeze({
   enabled: true,
   /** Baseline outgoing difficulty in leading zero bits; 0 disables generation. */
   outgoingDifficulty: DEFAULT_DIFFICULTY,
-  /** Wall-clock budget per recipient. The Smart Alerts runtime hard-limits the whole handler to ~5 minutes. */
-  maxComputeSeconds: 5,
+  /**
+   * Wall-clock budget per recipient. Deliberately short so sending stays snappy: Outlook shows its own "taking long"
+   * dialog after about five seconds, and the Smart Alerts runtime hard-limits the whole handler to ~5 minutes.
+   * Mirrors the Thunderbird default, and pairs with the shared 18 bit baseline.
+   */
+  maxComputeSeconds: 1,
   /** Incoming stamps older than this are rejected (whitepaper 6.7 step 5). */
   maxStampAgeDays: DEFAULT_MAX_AGE_DAYS,
   /** Below this difficulty a valid stamp counts as weak/yellow rather than strong/green. */

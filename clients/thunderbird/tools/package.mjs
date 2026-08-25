@@ -8,7 +8,7 @@
  * Only what the add-on needs at runtime goes in: no tests, tools or documentation.
  */
 
-import { mkdir, readFile, readdir, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join, posix, relative, sep } from "node:path";
 
@@ -56,7 +56,17 @@ const files = (await Promise.all(INCLUDE.map(collect))).flat()
 
 await mkdir(outDir, { recursive: true });
 const archive = createZip(files);
-await writeFile(outFile, archive);
+// Write beside the target and move it into place: a half-written .xpi is worse than none, and on Windows the target
+// is often still held open by whatever installed the previous build.
+const temporary = `${outFile}.tmp`;
+await writeFile(temporary, archive);
+try {
+  await rm(outFile, { force: true });
+  await rename(temporary, outFile);
+} catch (error) {
+  await rm(temporary, { force: true });
+  throw new Error(`cannot replace ${outFile} (is it open or installed from there?): ${error.message}`);
+}
 
 console.log(`${manifest.name} ${manifest.version} — ${files.length} files, ${Math.round(archive.length / 1024)} KB`);
 console.log(outFile);

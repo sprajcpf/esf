@@ -7,7 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { flattenRecipients } from "../src/background/composeSigner.js";
-import { parseRawHeaders } from "../src/background/verificationService.js";
+import { freshnessReference, parseRawHeaders } from "../src/background/verificationService.js";
 import { PeerClass, receiverPolicy, resolveOutgoingDifficulty } from "../src/protocol/policy.js";
 import { DEFAULTS, normalizeSettings, resolveWorkerCount } from "../src/utils/settings.js";
 import { SIGNAL_BY_STATE, Signal, StampState } from "../src/protocol/constants.js";
@@ -89,6 +89,46 @@ test("the traffic light follows the whitepaper mapping", () => {
   assert.equal(SIGNAL_BY_STATE[StampState.INVALID], Signal.RED);
 });
 
+test("the defaults compute quietly for a second, then keep going rather than dropping the stamp", () => {
+  assert.equal(DEFAULTS.maxComputeSeconds, 1, "a send must not visibly stall for seconds");
+  assert.equal(DEFAULTS.outgoingDifficulty, 18, "the baseline has to be reachable inside the quiet phase");
+  assert.equal(DEFAULTS.onTimeout, "ask", "with ESF enabled a message is meant to carry a stamp");
+  assert.ok(DEFAULTS.askAfterSeconds > DEFAULTS.maxComputeSeconds,
+    "asking must come well after the quiet phase, not instead of it");
+});
+
+test("stamps do not expire by default, and the window stays configurable", () => {
+  assert.equal(DEFAULTS.maxStampAgeDays, 0, "0 means a stamp never goes stale");
+  assert.equal(normalizeSettings({ maxStampAgeDays: 7 }).maxStampAgeDays, 7);
+  assert.equal(normalizeSettings({ maxStampAgeDays: -1 }).maxStampAgeDays, 0);
+  assert.equal(normalizeSettings({ maxStampAgeDays: 99999 }).maxStampAgeDays, 3650);
+});
+
+test("the ask threshold is clamped into something a human would wait for", () => {
+  assert.equal(normalizeSettings({ askAfterSeconds: 0 }).askAfterSeconds, 2);
+  assert.equal(normalizeSettings({ askAfterSeconds: 99999 }).askAfterSeconds, 600);
+  assert.equal(normalizeSettings({ askAfterSeconds: 30 }).askAfterSeconds, 30);
+});
+
+test("freshness is judged against the message date, so archived mail does not turn stale", () => {
+  const day = 24 * 60 * 60 * 1000;
+  const now = Date.UTC(2026, 7, 25, 12, 0, 0);
+  const arrived = now - 30 * day;
+  assert.equal(freshnessReference({ date: new Date(arrived) }, now), arrived);
+  assert.equal(freshnessReference({ date: new Date(arrived).toISOString() }, now), arrived);
+});
+
+test("a message dated in the future cannot buy itself extra freshness", () => {
+  const now = Date.UTC(2026, 7, 25, 12, 0, 0);
+  assert.equal(freshnessReference({ date: new Date(now + 90 * 24 * 60 * 60 * 1000) }, now), now);
+});
+
+test("a message without a usable date falls back to now", () => {
+  const now = Date.UTC(2026, 7, 25, 12, 0, 0);
+  assert.equal(freshnessReference({}, now), now);
+  assert.equal(freshnessReference({ date: "not a date" }, now), now);
+});
+
 test("settings are clamped so a corrupt profile cannot break the send path", () => {
   const settings = normalizeSettings({
     outgoingDifficulty: 99,
@@ -101,8 +141,8 @@ test("settings are clamped so a corrupt profile cannot break the send path", () 
     junkOnRed: "yes please"
   });
   assert.equal(settings.outgoingDifficulty, DEFAULTS.outgoingDifficulty);
-  assert.equal(settings.maxComputeSeconds, 1);
-  assert.equal(settings.maxStampAgeDays, 365);
+  assert.equal(settings.maxComputeSeconds, 1, "clamped up from a nonsensical value");
+  assert.equal(settings.maxStampAgeDays, 3650);
   assert.equal(settings.minIncomingDifficulty, 30);
   assert.equal(settings.maxWorkers, 0);
   assert.equal(settings.bccMode, "omit");
@@ -118,10 +158,12 @@ test("junk marking is off by default, so a missing stamp is never treated as abu
   assert.equal(DEFAULTS.junkOnRed, false);
 });
 
-test("worker count leaves a core to Thunderbird and honours the override", () => {
+test("worker count never takes the whole machine and honours the override", () => {
   assert.equal(resolveWorkerCount(normalizeSettings({}), 1), 1);
   assert.equal(resolveWorkerCount(normalizeSettings({}), 2), 1);
-  assert.equal(resolveWorkerCount(normalizeSettings({}), 8), 2);
+  assert.equal(resolveWorkerCount(normalizeSettings({}), 4), 2);
+  assert.equal(resolveWorkerCount(normalizeSettings({}), 8), 4, "four shards on a machine that can spare them");
+  assert.equal(resolveWorkerCount(normalizeSettings({}), 32), 4, "but never more than four by default");
   assert.equal(resolveWorkerCount(normalizeSettings({ maxWorkers: 6 }), 8), 6);
   assert.equal(resolveWorkerCount(normalizeSettings({ maxWorkers: 16 }), 4), 4);
 });
