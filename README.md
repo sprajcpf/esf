@@ -14,9 +14,13 @@ proposal, and a technical whitepaper.
 
 | Document | |
 |---|---|
-| [Technical Whitepaper v1.0 (Markdown)](docs/whitepaper.md) | Problem, prior art, architecture, the ESF-Stamp protocol, work profiles, policy, threat model, roadmap and RFC path |
-| [Technical Whitepaper v1.0 (HTML)](docs/whitepaper.html) | The same document rendered for reading and printing |
-| [Source document (.docx)](docs/ESF_End_Spam_Forever_Technical_Whitepaper_v1.0.docx) | Editable original; the Markdown and HTML are generated from it |
+| [Technical Whitepaper (Markdown)](docs/whitepaper.md) | **Canonical source.** Problem, prior art, architecture, the ESF-Stamp protocol, work profiles, policy, threat model, roadmap, RFC path, and Appendix D with the reference-client learnings |
+| [Technical Whitepaper (HTML)](docs/whitepaper.html) | Rendered for reading and printing |
+| [Technical Whitepaper (ODT)](docs/whitepaper.odt) | Rendered as an editable ODF text document |
+| [Original v1.0 (.docx)](docs/ESF_End_Spam_Forever_Technical_Whitepaper_v1.0.docx) | The document the Markdown was originally derived from |
+
+Both renders are generated from the Markdown, dependency-free:
+`cd clients/thunderbird && npm run whitepaper`.
 
 ## Clients
 
