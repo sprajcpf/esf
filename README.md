@@ -56,6 +56,17 @@ valid iff leading_zero_bits(SHA256(work)) >= d
 message, so no mailbox appears in clear text. Generating a 22-bit stamp costs about 4.2 million hashes; verifying one
 costs exactly one hash, whatever the sender declares. That asymmetry is the whole mechanism.
 
+## Contributing and security
+
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request — it lists the six non-negotiables (the
+protocol core stays free of client APIs, the test vectors are the contract, a missing stamp stays neutral, no central
+ESF service, no dependencies in the core, and proof of work never claims to authenticate anyone), the commands, and
+what kinds of contribution help most.
+
+Found a way to make a verifier accept work that was not done? [SECURITY.md](SECURITY.md) explains how to report it,
+distinguishes an implementation flaw from a **protocol** flaw, and lists the known limitations and non-issues so you
+do not spend time on something already documented.
+
 ## Licence
 
 Apache-2.0.
