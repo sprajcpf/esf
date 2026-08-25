@@ -18,10 +18,11 @@ proposal, and a technical whitepaper.
 | [Technical Whitepaper (HTML)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.html) | Rendered for reading and printing |
 | [Technical Whitepaper (ODT)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.odt) | Rendered as an editable ODF text document |
 | [Technical Whitepaper (DOCX)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.docx) | Rendered as a Word document |
+| [Adoption Roadmap](docs/ESF_End_Spam_Forever_Adoption_Roadmap.md) ([HTML](docs/ESF_End_Spam_Forever_Adoption_Roadmap.html), [ODT](docs/ESF_End_Spam_Forever_Adoption_Roadmap.odt), [DOCX](docs/ESF_End_Spam_Forever_Adoption_Roadmap.docx)) | How ESF gets from working prototype to ecosystem adoption: ordered stages with explicit exit criteria, no dates |
 
-All three renders are generated from the Markdown and then checked against it, dependency-free:
-`cd clients/thunderbird && npm run whitepaper`. The check compares headings, tables, code blocks and key wording, so
-a format cannot silently drift out of sync again.
+All renders are generated from the Markdown and then checked against it, dependency-free:
+`cd clients/thunderbird && npm run docs`. The check compares headings, tables, code blocks and key
+wording, so a format cannot silently drift out of sync again.
 
 ## Clients
 

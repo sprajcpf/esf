@@ -622,7 +622,7 @@ plus deterministic test vectors checked by both test suites, was the single most
 drift. Client adapters contain no protocol logic. Any future integration (webmail, gateway, MTA) should consume the
 same core and vectors rather than reimplementing the wire format.
 
-### D.10 Measured hash rates behind the section 7.3 model
+### D.10 Measured hash rates behind the section 7.4 model
 Measured on one mid-range Windows 11 desktop (Node.js 22, single thread, August 2026) with the reference core's own
 canonical work input: the bundled pure-JavaScript SHA-256 reaches ~198,000 H/s and per-call native hashing through the
 platform crypto API ~280,000 H/s, while WebCrypto's per-call async digest collapses to ~13,000 H/s - which is why the
@@ -630,7 +630,7 @@ nonce search uses the synchronous implementation and reserves WebCrypto for one-
 consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient; a one-second
 per-recipient budget therefore fails d=18 about half the time (the success probability within budget t is
 1 - e^(-t * rate / 2^d)), so compute budgets and baseline difficulty MUST be calibrated together. The GPU, ASIC and
-Argon2id numbers in section 7.3 are estimates from public benchmarks, not measurements; producing measured values
+Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values
 across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.
 
 ## References

@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ESF — End Spam Forever · Technical Whitepaper v1.0.1</title>
+<meta name="description" content="A Proof-of-Work framework for email abuse resistance. Pre-RFC technical whitepaper.">
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1d21;
+  --muted: #5b6472;
+  --border: #e0e3e8;
+  --surface: #f6f7f9;
+  --brand: #1a4a9c;
+  --brand-dark: #122f6e;
+  --accent: #3f9c35;
+  --code-bg: #f2f4f7;
+  --max: 60rem;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171b;
+    --fg: #e6e9ee;
+    --muted: #a3abb8;
+    --border: #2c3238;
+    --surface: #1b1f24;
+    --brand: #6ea8fe;
+    --brand-dark: #9dc4ff;
+    --accent: #6cc75f;
+    --code-bg: #1d2227;
+  }
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+.page { max-width: var(--max); margin: 0 auto; padding: 2.5rem 1.5rem 6rem; }
+header.masthead { text-align: center; padding: 1rem 0 2rem; border-bottom: 1px solid var(--border); }
+header.masthead img { max-width: min(420px, 90%); height: auto; }
+header.masthead .title { font-size: 1.05rem; color: var(--muted); margin-top: 1.25rem; }
+header.masthead .meta { color: var(--muted); font-size: 0.9rem; margin-top: 0.4rem; }
+h1 { font-size: 2rem; line-height: 1.2; margin: 2.5rem 0 0.5rem; letter-spacing: -0.01em; }
+h2 {
+  font-size: 1.45rem;
+  margin: 3rem 0 0.75rem;
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--border);
+  scroll-margin-top: 1rem;
+}
+h3 { font-size: 1.12rem; margin: 2rem 0 0.5rem; color: var(--brand); scroll-margin-top: 1rem; }
+h4 { font-size: 1rem; margin: 1.5rem 0 0.4rem; }
+p { margin: 0 0 1rem; }
+a { color: var(--brand); }
+ul, ol { margin: 0 0 1rem; padding-left: 1.4rem; }
+li { margin-bottom: 0.35rem; }
+blockquote {
+  margin: 1.5rem 0;
+  padding: 1rem 1.15rem;
+  background: var(--surface);
+  border-left: 3px solid var(--accent);
+  border-radius: 0 6px 6px 0;
+}
+blockquote strong:first-child { color: var(--accent); }
+code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: var(--code-bg);
+  padding: 0.12em 0.35em;
+  border-radius: 4px;
+}
+pre {
+  background: var(--code-bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.1rem;
+  overflow-x: auto;
+  margin: 1.25rem 0;
+}
+pre code { background: none; padding: 0; font-size: 0.85rem; line-height: 1.5; }
+.table-scroll { overflow-x: auto; margin: 1.25rem 0; }
+table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+th, td { text-align: left; vertical-align: top; padding: 0.55rem 0.7rem; border-bottom: 1px solid var(--border); }
+thead th { background: var(--surface); font-weight: 600; }
+tbody tr:hover { background: var(--surface); }
+hr { border: 0; border-top: 1px solid var(--border); margin: 2.5rem 0; }
+nav.toc {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.1rem 1.3rem;
+  margin: 2rem 0;
+}
+nav.toc h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted);
+  border: 0; margin: 0 0 0.6rem; padding: 0; }
+nav.toc ul { list-style: none; padding: 0; margin: 0; columns: 2; column-gap: 2rem; }
+nav.toc li { margin-bottom: 0.25rem; break-inside: avoid; }
+nav.toc li.level-3 { padding-left: 1rem; font-size: 0.92rem; }
+nav.toc a { text-decoration: none; }
+nav.toc a:hover { text-decoration: underline; }
+footer.colophon { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: 0.85rem; }
+@media print {
+  :root { --bg: #fff; --fg: #000; --surface: #f4f4f4; --code-bg: #f4f4f4; --border: #ccc; }
+  nav.toc { break-after: page; }
+  h2 { break-after: avoid; }
+  pre, table, blockquote { break-inside: avoid; }
+}
+@media (max-width: 640px) {
+  nav.toc ul { columns: 1; }
+  h1 { font-size: 1.6rem; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+<header class="masthead">
+  <img src="../assets/logo.png" alt="ESF — End Spam Forever">
+  <div class="title">A Proof-of-Work Framework for Email Abuse Resistance</div>
+  <div class="meta">Technical Whitepaper · Version 1.0.1 (Pre-RFC) · 25 August 2026</div>
+</header>
+
+<nav class="toc">
+  <h2>Contents</h2>
+  <ul>
+<li class="level-2"><a href="#from-working-prototype-to-email-ecosystem-adoption">From working prototype to email-ecosystem adoption</a></li>
+<li class="level-2"><a href="#the-adoption-problem-stated-honestly">The adoption problem, stated honestly</a></li>
+<li class="level-2"><a href="#stage-0-baseline-what-actually-exists">Stage 0 — Baseline: what actually exists</a></li>
+<li class="level-2"><a href="#the-sequence">The sequence</a></li>
+<li class="level-2"><a href="#stage-1-reference-implementation-stability">Stage 1 — Reference implementation stability</a></li>
+<li class="level-2"><a href="#stage-2-extract-the-core-one-package-one-specification">Stage 2 — Extract the core: one package, one specification</a></li>
+<li class="level-2"><a href="#stage-3-developer-adoptable-package">Stage 3 — Developer-adoptable package</a></li>
+<li class="level-2"><a href="#stage-4-client-distribution-through-official-channels">Stage 4 — Client distribution through official channels</a></li>
+<li class="level-2"><a href="#stage-5-standalone-verifier-and-spam-filter-integration">Stage 5 — Standalone verifier and spam-filter integration</a></li>
+<li class="level-2"><a href="#stage-6-outreach-to-those-who-already-thought-about-this">Stage 6 — Outreach to those who already thought about this</a></li>
+<li class="level-3"><a href="#who-and-why-they-matter">Who, and why they matter</a></li>
+<li class="level-3"><a href="#rules-for-this-stage">Rules for this stage</a></li>
+<li class="level-2"><a href="#stage-7-independent-implementations">Stage 7 — Independent implementations</a></li>
+<li class="level-2"><a href="#stage-8-independent-security-review">Stage 8 — Independent security review</a></li>
+<li class="level-2"><a href="#stage-9-mail-operator-engagement">Stage 9 — Mail operator engagement</a></li>
+<li class="level-2"><a href="#stage-10-real-world-pilots-observe-verify-measure">Stage 10 — Real-world pilots: observe → verify → measure</a></li>
+<li class="level-2"><a href="#stage-11-normative-specification-and-internet-draft">Stage 11 — Normative specification and Internet-Draft</a></li>
+<li class="level-2"><a href="#stage-12-registration-provider-adoption-esf-smtp">Stage 12 — Registration, provider adoption, ESF-SMTP</a></li>
+<li class="level-2"><a href="#guiding-principles">Guiding principles</a></li>
+<li class="level-2"><a href="#cross-stage-dependencies-at-a-glance">Cross-stage dependencies at a glance</a></li>
+<li class="level-2"><a href="#immediate-next-actions-in-order">Immediate next actions, in order</a></li>
+  </ul>
+</nav>
+
+<h1 id="esf-adoption-roadmap">ESF — Adoption Roadmap</h1>
+<h2 id="from-working-prototype-to-email-ecosystem-adoption">From working prototype to email-ecosystem adoption</h2>
+<p><strong>Companion document to the <a href="ESF_End_Spam_Forever_Technical_Whitepaper.md">Technical Whitepaper</a>.</strong> The whitepaper</p>
+<p>says what ESF <em>is</em>; this document says in what order it can become something the email ecosystem actually uses.</p>
+<p><strong>Objective.</strong> Make large-scale unsolicited email economically expensive while keeping legitimate email simple.</p>
+<blockquote><strong>No dates.</strong> Every stage is expressed as a dependency, not a schedule. A stage begins when the exit criteria of its prerequisites are met — not when a quarter starts. Where a stage cannot be entered, that is information about the previous stage, not a reason to skip ahead.</blockquote>
+<hr>
+<h2 id="the-adoption-problem-stated-honestly">The adoption problem, stated honestly</h2>
+<p>Before planning adoption it is worth naming why this has not already happened, because the answer shapes every stage</p>
+<p>below.</p>
+<p><strong>Verifiers are not the bottleneck.</strong> Apache SpamAssassin has shipped</p>
+<p><a href="https://spamassassin.apache.org/full/3.1.x/doc/Mail_SpamAssassin_Plugin_Hashcash.html"><code>Mail::SpamAssassin::Plugin::Hashcash</code></a></p>
+<p>for roughly two decades, complete with double-spend tracking of tokens. A receiver-side proof-of-work check for email</p>
+<p>has therefore been available, packaged and documented since before most current mail infrastructure was deployed, and</p>
+<p>it is used by almost nobody — because almost nobody sends stamps. The scarce resource in this ecosystem is not</p>
+<p>verification code; it is <strong>senders who stamp</strong> and <strong>receivers who let a stamp change an outcome</strong>.</p>
+<p><strong>That is a two-sided deadlock</strong>, and it defines the shape of this roadmap: no stage may depend on both sides moving</p>
+<p>at once. Every stage must be useful to whichever side adopts it first.</p>
+<ul><li>A sender that stamps into a world of unaware receivers loses nothing measurable (one second of CPU) and gains</li></ul>
+<p>nothing yet.</p>
+<ul><li>A receiver that verifies into a world of unstamped mail gains a signal that is currently almost always absent —</li></ul>
+<p>which is exactly why <em>absence must stay neutral</em> (whitepaper 11) and why <code>junkOnRed</code> ships off.</p>
+<p><strong>The standing objection is twenty years old and still unanswered by most PoW proposals.</strong> Laurie and Clayton,</p>
+<p><a href="https://www.cl.cam.ac.uk/~rnc1/proofwork2.pdf">*&quot;Proof-of-Work&quot; Proves Not to Work*</a> (2004), analysed real ISP</p>
+<p>traffic and concluded that a difficulty high enough to deter spammers would also block a material fraction of</p>
+<p>legitimate senders — with 93.5 % of machines sending fewer than 75 messages a day, they put legitimate collateral</p>
+<p>damage at 1–13 %. ESF's own cost model (whitepaper 7.4) reaches a compatible conclusion from the other end: no single</p>
+<p>SHA-256 difficulty is simultaneously bearable for a laptop and expensive for an operator with mining hardware.</p>
+<p>ESF's answer is not that the objection is wrong. It is that the objection assumes a <em>uniform, mandatory</em> difficulty:</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Laurie/Clayton assumption</th><th>ESF's structural answer</th></tr></thead><tbody>
+<tr><td>Everyone pays the same difficulty</td><td>Trust-aware policy (whitepaper 7.3): known contacts, previous correspondents and authenticated senders pay <strong>zero</strong></td></tr>
+<tr><td>A proof is a delivery permit</td><td>A stamp is one input to existing filtering; absence is neutral (whitepaper 11)</td></tr>
+<tr><td>Compute-bound work only</td><td>Algorithm agility: a memory-hard profile narrows the client-to-attacker gap by orders of magnitude (7.2, 7.4)</td></tr>
+<tr><td>Total work is the cost</td><td>Contemporaneity (6.7a) turns a stockpiled one-off expense into a required sustained <em>rate</em></td></tr>
+</tbody></table></div>
+<p>**Whether that answer holds is an empirical question, and it is the single most important thing this roadmap has to</p>
+<p>settle.** It is settled in Stage 8 (independent review) and Stage 10 (pilots) — not by argument.</p>
+<hr>
+<h2 id="stage-0-baseline-what-actually-exists">Stage 0 — Baseline: what actually exists</h2>
+<p>Not a stage to plan; the measured starting point. Determined by inspecting the repository, not from the whitepaper's</p>
+<p>claims.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Component</th><th>State</th><th>Evidence</th></tr></thead><tbody>
+<tr><td>Protocol core (constants, canonicalisation, tokens, parser, verifier, policy)</td><td><strong>Implemented</strong>, free of client APIs</td><td><code>clients/thunderbird/src/protocol/</code></td></tr>
+<tr><td>SHA-256 work profile</td><td><strong>Implemented</strong>, both clients</td><td><code>protocol/sha256.js</code>, <code>protocol/stamp.js</code></td></tr>
+<tr><td>Argon2id work profile</td><td><strong>Not implemented.</strong> Recognised, reported <code>unsupported</code>, never executed</td><td><code>IMPLEMENTED_ALGORITHMS</code> vs <code>KNOWN_ALGORITHMS</code> in <code>protocol/constants.js</code></td></tr>
+<tr><td>Strict verification limits (size, count, difficulty cap, bounded parsing)</td><td><strong>Implemented</strong></td><td><code>protocol/parser.js</code>, <code>protocol/verifier.js</code></td></tr>
+<tr><td>Replay ledger</td><td><strong>Implemented</strong>, per installation, bounded retention</td><td><code>background/verificationService.js</code></td></tr>
+<tr><td>Contemporaneity + optional expiry</td><td><strong>Implemented</strong></td><td><code>verifier.js</code>, whitepaper 6.7a</td></tr>
+<tr><td>Bcc privacy handling</td><td><strong>Implemented</strong>: <code>omit</code> default, <code>token</code> opt-in; no clear-text mailbox in any header</td><td><code>background/composeSigner.js</code></td></tr>
+<tr><td>Thunderbird client</td><td><strong>Implemented and verified on Thunderbird 153</strong></td><td><code>clients/thunderbird/</code>, 161 tests</td></tr>
+<tr><td>Outlook client</td><td><strong>Implemented</strong> (Office.js, <code>OnMessageSend</code>, internet headers)</td><td><code>clients/outlook/</code>, 22 tests</td></tr>
+<tr><td>Shared test vectors</td><td><strong>Implemented</strong>, checked by both suites</td><td><code>clients/thunderbird/test/vectors.json</code></td></tr>
+<tr><td>Real-world end-to-end proof</td><td><strong>Achieved once</strong>: a stamped message delivered through ordinary SMTP verified green on receipt</td><td><code>clients/thunderbird/tools/verify-eml.mjs</code></td></tr>
+<tr><td>Standalone core package</td><td><strong>Not done.</strong> Outlook imports the core out of the Thunderbird tree</td><td><code>clients/outlook/src/esf-core.js</code></td></tr>
+<tr><td>Normative protocol specification</td><td><strong>Not done.</strong> Whitepaper only</td><td><code>docs/</code></td></tr>
+<tr><td>Server-side / filter verifier</td><td><strong>Not done</strong></td><td>—</td></tr>
+<tr><td>CI, <code>CONTRIBUTING.md</code>, <code>SECURITY.md</code>, release artefacts</td><td><strong>Not done</strong></td><td>repository root</td></tr>
+<tr><td>DNS policy discovery</td><td><strong>Proposed only</strong></td><td>whitepaper 8</td></tr>
+<tr><td>ESF-SMTP profile</td><td><strong>Proposed only</strong></td><td>whitepaper 9</td></tr>
+</tbody></table></div>
+<p>**Two clients exist and share one core, which is further than most protocol proposals get. What does not yet exist is</p>
+<p>anything a third party can adopt without reading this project's source tree.** That gap is Stages 1–3.</p>
+<hr>
+<h2 id="the-sequence">The sequence</h2>
+<pre class="lang-text"><code>Stage 0   Baseline: two clients, one core, no third-party surface   [achieved]
+   ↓
+Stage 1   Reference implementation stability
+   ↓
+Stage 2   Extract the core: one package, one specification
+   ↓
+Stage 3   Developer-adoptable package
+   ↓
+Stage 4   Client distribution through official channels
+   ↓
+Stage 5   Standalone verifier and spam-filter integration
+   ↓
+Stage 6   Outreach to those who already thought about this
+   ↓            ↘
+Stage 7   Independent implementations        Stage 8   Independent security review
+   ↓            ↙
+Stage 9   Mail operator engagement
+   ↓
+Stage 10  Real-world pilots: observe → verify → measure
+   ↓
+Stage 11  Normative specification and Internet-Draft
+   ↓
+Stage 12  Registration, provider adoption, ESF-SMTP</code></pre>
+<p>Stages 7 and 8 are deliberately parallel: an independent implementation is itself a form of review, and a security</p>
+<p>review of a single implementation cannot distinguish a protocol flaw from a coding mistake. Everything after Stage 9</p>
+<p>depends on both.</p>
+<hr>
+<h2 id="stage-1-reference-implementation-stability">Stage 1 — Reference implementation stability</h2>
+<p><strong>Prerequisite:</strong> Stage 0.</p>
+<p><strong>Purpose:</strong> make the reference behaviour something a second implementer can trust as <em>the</em> behaviour, rather than</p>
+<p>one project's current state.</p>
+<p>Work:</p>
+<ul><li><strong>Close the argon2id gap.</strong> The whitepaper defines ESF v1 as a two-profile family, and no client implements the</li></ul>
+<p>memory-hard profile — which is precisely the profile the cost model says the mechanism needs. Until it exists,</p>
+<p>&quot;algorithm agile&quot; is a claim, not a demonstrated property.</p>
+<ul><li><strong>Publish a benchmark harness</strong>, not benchmark prose: a runnable measurement of hash rate, generation latency and</li></ul>
+<p>verification latency per profile and per machine class. Whitepaper 7.4 currently carries estimates that it itself</p>
+<p>marks as requiring replacement.</p>
+<ul><li><strong>Adversarial input suite.</strong> The parser is bounded by construction; that needs demonstrating with a fuzzer over</li></ul>
+<p>header values, not only with hand-written malformed cases.</p>
+<ul><li><strong>Continuous integration</strong> running both client suites and the vector check on every change.</li><li><strong>Cross-client interoperability as an automated test</strong>, not a manual claim.</li></ul>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>A stamp generated by Thunderbird verifies in Outlook
+AND a stamp generated by Outlook verifies in Thunderbird
+AND both agree on every state: strong / weak / missing / invalid / unsupported
+AND both refuse the same malformed, replayed, stockpiled and over-declared inputs
+AND every published difficulty figure is reproducible by a documented benchmark run
+AND CI enforces all of the above</code></pre>
+<p><strong>Falsification signal:</strong> if the two clients disagree on any vector, the vectors are not yet a specification.</p>
+<hr>
+<h2 id="stage-2-extract-the-core-one-package-one-specification">Stage 2 — Extract the core: one package, one specification</h2>
+<p><strong>Prerequisite:</strong> Stage 1.</p>
+<p>Today the Outlook client imports the protocol out of <code>clients/thunderbird/src/protocol/</code>. The code comments already</p>
+<p>anticipate the move (<code>clients/outlook/src/esf-core.js</code>). This matters beyond tidiness: **no external implementer will</p>
+<p>take a dependency on another client's source directory**, and the layout currently implies Thunderbird is</p>
+<p>privileged, which contradicts vendor neutrality.</p>
+<p>Work:</p>
+<ul><li>Move the core to <code>packages/esf-core</code> with its own tests, version and changelog; both clients consume it.</li><li>Extract the wire format into a <strong>standalone specification document</strong>, separate from the whitepaper: field grammar,</li></ul>
+<p>canonicalisation, token derivation, canonical work input, verification order, bounds, state machine. Normative</p>
+<p>language, no rationale, no marketing.</p>
+<ul><li>Promote the test vectors to a <strong>versioned artefact</strong> with a stable schema, published independently of any client.</li><li>State the protocol's stability policy: what may change in v1, what requires v2.</li></ul>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>The core has no import from any client directory
+AND both clients depend on the same released core version
+AND the specification document is sufficient to implement a verifier
+AND the vectors are consumable without cloning the repository</code></pre>
+<hr>
+<h2 id="stage-3-developer-adoptable-package">Stage 3 — Developer-adoptable package</h2>
+<p><strong>Prerequisite:</strong> Stage 2.</p>
+<p><strong>Test of this stage:</strong> a competent developer implements a working ESF <em>verifier</em> in a language of their choice</p>
+<p>without reading the whitepaper and without asking the project a question.</p>
+<p>Work:</p>
+<ul><li>Implementation guide, in the order a verifier is actually built: parse → bound → recompute tokens → one work</li></ul>
+<p>operation → replay → state → signal.</p>
+<ul><li>API documentation for the core, and a worked example per direction (mint, verify).</li><li><code>CONTRIBUTING.md</code>, <code>SECURITY.md</code> (including how to report a protocol flaw, not only a code flaw),</li></ul>
+<p><code>CODE_OF_CONDUCT.md</code>, <code>CHANGELOG.md</code> — none exist today.</p>
+<ul><li>Compatibility matrix: which client, which profile, which platform, which requirement set.</li><li>Profile registry document: how a work profile is added, deprecated and retired without changing the base format.</li></ul>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>An external developer produces a verifier that passes the published vectors
+without contacting the project</code></pre>
+<hr>
+<h2 id="stage-4-client-distribution-through-official-channels">Stage 4 — Client distribution through official channels</h2>
+<p><strong>Prerequisite:</strong> Stage 3 (so that people who find the add-on can find the protocol too).</p>
+<p>Work:</p>
+<ul><li>Thunderbird add-on submitted to the official add-on site, through its review process.</li><li>Outlook add-in packaged for organisational deployment; the automatic send hook requires admin deployment, which is</li></ul>
+<p>a documentation problem as much as a packaging one.</p>
+<ul><li>Signed GitHub releases carrying the client artefacts, the core package and the vector set.</li><li>Installation documentation and a short demonstration showing the traffic light on real, delivered mail.</li></ul>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>Both clients installable by a non-developer from an official channel
+AND a stamped message crosses at least one independent mail provider
+    and verifies at the far end</code></pre>
+<p><strong>Explicitly not a success metric:</strong> download counts. The metric of this stage is <em>transport survival</em> — stamps</p>
+<p>arriving intact through infrastructure nobody involved controls, including header folding, gateways and forwarders.</p>
+<hr>
+<h2 id="stage-5-standalone-verifier-and-spam-filter-integration">Stage 5 — Standalone verifier and spam-filter integration</h2>
+<p><strong>Prerequisite:</strong> Stages 2 and 4. This is the highest-leverage adoption stage, because it is the side of the deadlock</p>
+<p>that can move alone: a filter can verify stamps usefully before any local user sends one.</p>
+<p>Work:</p>
+<ul><li>A standalone verifier usable from a mail pipeline, returning machine-readable states and nothing else:</li></ul>
+<pre class="lang-text"><code>ESF_STRONG    a stamp satisfies local policy
+ESF_WEAK      real work, below policy, or an unimplemented registered profile
+ESF_NONE      no stamp present
+ESF_INVALID   malformed, insufficient, wrong recipient, stockpiled, replayed</code></pre>
+<ul><li>Integrations for Rspamd, SpamAssassin and at least one gateway ecosystem, contributing a **small score</li></ul>
+<p>adjustment**, never a verdict.</p>
+<ul><li>Server-side replay scope: a client ledger is per installation; a filter can offer per-domain replay detection,</li></ul>
+<p>which is strictly stronger, and needs its own retention and privacy discussion.</p>
+<ul><li>Explicit statement of what happens to mail without a stamp: nothing.</li></ul>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>A filter operator can enable ESF verification from packaged configuration
+AND the ESF result is visible in that filter's own reporting
+AND enabling it changes no delivery outcome for unstamped mail
+AND verification cost is measured under production load, per profile</code></pre>
+<p><strong>Constraint carried from the whitepaper:</strong> memory-hard verification is not free. An Argon2id verifier must have</p>
+<p>bounded memory before it is exposed to arbitrary senders, or the receiver-side denial-of-service it prevents on one</p>
+<p>axis is reintroduced on another.</p>
+<hr>
+<h2 id="stage-6-outreach-to-those-who-already-thought-about-this">Stage 6 — Outreach to those who already thought about this</h2>
+<p><strong>Prerequisite:</strong> Stages 3 and 5, so that the first question — &quot;is there something I can actually run and read?&quot; —</p>
+<p>has an answer.</p>
+<p>This stage exists because the people best able to break ESF are the ones who already reasoned about</p>
+<p>proof-of-work for email and, in several cases, published why it fails. The tone is single-purposed:</p>
+<blockquote>You arrived at this idea independently, and in some cases argued against it. We have built an interoperable implementation with an explicit threat model, and we would value your technical criticism.</blockquote>
+<p>Not: <em>please promote our project.</em></p>
+<h3 id="who-and-why-they-matter">Who, and why they matter</h3>
+<div class="table-scroll"><table>
+<thead><tr><th>Person / project</th><th>Background</th><th>Why ESF is relevant</th><th>Likely objection</th><th>Role</th><th>Channel</th></tr></thead><tbody>
+<tr><td><strong>Richard Clayton</strong> (Cambridge Cybercrime Centre)</td><td>Co-author of <a href="https://www.cl.cam.ac.uk/~rnc1/proofwork2.pdf">*&quot;Proof-of-Work&quot; Proves Not to Work*</a> (2004), the standing empirical refutation</td><td>ESF's trust-aware exemption and memory-hard profile are direct responses to his collateral-damage finding; his ISP-traffic method is the right way to test them</td><td>The 1–13 % legitimate-sender damage recurs; botnets externalise the cost</td><td><strong>Protocol critic</strong>, research advisor</td><td>Institutional page / academic contact</td></tr>
+<tr><td><strong>Ben Laurie</strong></td><td>Co-author of the same paper; long career in applied cryptography and transparency systems</td><td>Same as above, plus a practitioner's view on what receivers will actually deploy</td><td>PoW is the wrong lever; reputation and authentication dominate</td><td>Protocol critic, reviewer</td><td>Public professional channels</td></tr>
+<tr><td><strong>Adam Back</strong></td><td>Author of <a href="http://www.hashcash.org/hashcash.pdf">Hashcash</a>, the design ESF descends from</td><td>ESF is the deployment-oriented successor to his cost function: recipient binding, algorithm agility, receiver policy</td><td>Difficulty calibration and ASIC economics; hashcash's own adoption history</td><td>Reviewer, <strong>amplifier</strong></td><td>Public professional channels</td></tr>
+<tr><td><strong>Cynthia Dwork</strong>, <strong>Moni Naor</strong></td><td><em>Pricing via Processing or Combatting Junk Mail</em> (1992); later memory-bound functions</td><td>The originators of the pricing argument and of memory-hardness, which is exactly ESF's second profile</td><td>Parameter choice needs proof, not benchmarks</td><td>Research advisors</td><td>Institutional contact</td></tr>
+<tr><td><strong>L. Jean Camp</strong>, <strong>Debin Liu</strong></td><td><em>Proof of Work can Work</em> — the counter-analysis to Laurie/Clayton</td><td>Already argued the affirmative case; best placed to say which conditions ESF must meet for it to hold</td><td>Their conditions may not match ESF's parameters</td><td>Research advisors</td><td>Institutional contact</td></tr>
+<tr><td><strong>Justin Mason</strong> / Apache SpamAssassin</td><td>Author of the long-standing SpamAssassin Hashcash plugin with double-spend tracking</td><td>The closest existing ancestor of ESF's replay ledger, and the clearest evidence about <em>why</em> stamps never arrived</td><td>&quot;We shipped this; nobody sent tokens&quot;</td><td><strong>Reviewer</strong>, integration partner</td><td>Apache SpamAssassin lists / issue tracker</td></tr>
+<tr><td><strong>Vsevolod Stakhov</strong> / Rspamd</td><td>Author and maintainer of the most widely deployed open-source filter</td><td>Stage 5 lands here first; Rspamd's scoring model is the natural home for a small ESF adjustment</td><td>Cost per message under load; another rarely-firing symbol</td><td><strong>Independent implementer</strong>, integration partner</td><td>Rspamd GitHub / mailing list</td></tr>
+<tr><td><strong>Wietse Venema</strong> / Postfix</td><td>Postfix author</td><td>ESF-SMTP (whitepaper 9) cannot exist without MTA authors finding it acceptable</td><td>Envelope-level work belongs nowhere near the SMTP path</td><td>Protocol critic</td><td>Postfix mailing list</td></tr>
+<tr><td><strong>Stalwart, mailcow and comparable modern stacks</strong></td><td>Actively developed mail servers with room for new checks</td><td>Small, fast-moving projects are the realistic first server-side implementers</td><td>Maintenance burden for an unadopted protocol</td><td>Independent implementers</td><td>Project issue trackers</td></tr>
+<tr><td><strong>Xe Iaso</strong> / <a href="https://en.wikipedia.org/wiki/Anubis_(software">Anubis</a>)</td><td>Author of the SHA-256 proof-of-work gate now deployed across FOSS infrastructure (GNOME, FFmpeg, Wine, kernel archives)</td><td>The strongest current evidence that PoW gating is operationally acceptable <em>today</em>, plus hard-won lessons about legitimate-client fallout</td><td>Client diversity and accessibility fallout; PoW as an arms race</td><td><strong>Reviewer, amplifier</strong></td><td>Public project channels</td></tr>
+<tr><td><strong>Aravinth Manivannan</strong> / mCaptcha</td><td>Load-adaptive proof-of-work difficulty</td><td>Difficulty as a function of current load is a policy model ESF's <code>policy.js</code> seam could adopt for receivers under attack</td><td>Fixed difficulty is the wrong control</td><td>Contributor, reviewer</td><td>Project repository</td></tr>
+<tr><td><strong>Thunderbird add-on reviewers</strong>; <strong>Betterbird</strong></td><td>Gatekeepers and close observers of the client platform</td><td>Stage 4 passes through them; they see what breaks for real users</td><td>Send-path add-ons are risky; UI clutter</td><td>Reviewers</td><td>Add-on review process / project channels</td></tr>
+<tr><td><strong>Mailop</strong>, <strong>M³AAWG</strong></td><td>Operator and anti-abuse communities</td><td>The audience that decides whether a signal is worth acting on</td><td>&quot;Another header we have to ignore&quot;; forwarding and list breakage</td><td>Reviewers, <strong>amplifiers</strong></td><td>Community mailing lists / membership process</td></tr>
+</tbody></table></div>
+<h3 id="rules-for-this-stage">Rules for this stage</h3>
+<ul><li>One message, technically specific, naming the objection the recipient is most likely to raise <strong>before</strong> they raise</li></ul>
+<p>it. No follow-up campaign.</p>
+<ul><li>Every serious objection is recorded in the repository with its status: accepted, mitigated, disputed with reasons,</li></ul>
+<p>or open. An objection list nobody can read is not review.</p>
+<ul><li>Criticism that invalidates a design choice changes the design. If Stage 6 produces no change anywhere, it was</li></ul>
+<p>performed as marketing and must be repeated properly.</p>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>Substantive technical responses received from more than one independent reviewer
+AND every objection recorded with a status
+AND at least one design decision changed, or explicitly defended in writing</code></pre>
+<hr>
+<h2 id="stage-7-independent-implementations">Stage 7 — Independent implementations</h2>
+<p><strong>Prerequisite:</strong> Stage 3 (adoptable package), reinforced by Stage 6 (people who might build one).</p>
+<p>A protocol only one project can implement is a product. Targets, in rough order of usefulness to adoption: a</p>
+<p>server-side verifier in the language of a filter ecosystem (Lua, C, Rust, Go), then library implementations (Python,</p>
+<p>Rust, Go, Java) for gateways and webmail.</p>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>At least one implementation written by people unconnected to this project
+passes the published vectors
+AND interoperates in both directions with the reference clients
+AND its author reports at least one specification ambiguity  ← this is the real deliverable</code></pre>
+<p>The ambiguity report is the point. A specification that produces no questions on first external use has probably not</p>
+<p>been used.</p>
+<hr>
+<h2 id="stage-8-independent-security-review">Stage 8 — Independent security review</h2>
+<p><strong>Prerequisite:</strong> Stage 2 (a specification to review) and Stage 5 (a server-side attack surface to review). Runs in</p>
+<p>parallel with Stage 7.</p>
+<p>Scope, stated as the questions the review must answer rather than as areas:</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Area</th><th>The question</th></tr></thead><tbody>
+<tr><td>Replay</td><td>Can one stamp gain credit twice anywhere in the ecosystem — across folders, devices, users, or domains?</td></tr>
+<tr><td>Proof reuse / stockpiling</td><td>Does contemporaneity (6.7a) actually bind work to a message when the reference timestamp is missing or forged?</td></tr>
+<tr><td>Recipient substitution</td><td>Can a stamp for one mailbox be made to verify for another, including aliases and plus-addressing?</td></tr>
+<tr><td>Forwarding and mailing lists</td><td>What happens to a valid stamp through a forwarder, a list expander and a re-writer — and is the resulting state honest?</td></tr>
+<tr><td>Bcc</td><td>Does <code>token</code> mode leak more than the whitepaper claims, given a realistic guess list?</td></tr>
+<tr><td>Algorithm downgrade</td><td>Can a sender force a weaker or unimplemented profile into a favourable outcome?</td></tr>
+<tr><td>Difficulty</td><td>Can a declared value cause a verifier to spend unbounded work, memory or storage?</td></tr>
+<tr><td>Verifier DoS</td><td>What does a message stuffed with maximal stamps cost the receiver, per profile, measured?</td></tr>
+<tr><td>Privacy</td><td>What does a stamp disclose about sender, recipients and infrastructure that the message did not already?</td></tr>
+</tbody></table></div>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>An independent reviewer, not the authors, publishes findings
+AND every finding is fixed, mitigated, or documented as accepted with rationale
+AND the threat model in the whitepaper is updated to match what the review found</code></pre>
+<hr>
+<h2 id="stage-9-mail-operator-engagement">Stage 9 — Mail operator engagement</h2>
+<p><strong>Prerequisite:</strong> Stages 5, 7 and 8. Approaching operators before there is an independent implementation and a</p>
+<p>security review wastes the one chance to be taken seriously.</p>
+<p>Purpose: operational feedback, not promotion. What breaks at scale, what an operator would need before letting an</p>
+<p>ESF result touch placement, and what they will refuse outright.</p>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>At least one operator states the conditions under which they would evaluate ESF in production
+AND those conditions are documented as protocol or implementation requirements</code></pre>
+<hr>
+<h2 id="stage-10-real-world-pilots-observe-verify-measure">Stage 10 — Real-world pilots: observe → verify → measure</h2>
+<p><strong>Prerequisite:</strong> Stage 9.</p>
+<pre class="lang-text"><code>Observe        stamps are logged, nothing changes
+   ↓
+Verify         results are computed and reported, still nothing changes
+   ↓
+Measure        correlate with the filter verdicts the operator already trusts</code></pre>
+<p>Never, at this stage: reject unstamped mail. The population of stamped mail is small and self-selected; enforcement</p>
+<p>on that basis measures nothing and breaks delivery.</p>
+<p>Measure, per profile and per platform: adoption share of stamped mail; generation latency; verification latency; CPU</p>
+<p>and memory cost; correlation with existing spam verdicts; false positives; false negatives; delivery impact;</p>
+<p>legitimate-sender fallout — **the last one is the Laurie/Clayton number, and producing it is the point of the whole</p>
+<p>stage.**</p>
+<p>Data discipline: aggregate and anonymised, published as methodology plus results. **No central telemetry may become</p>
+<p>a protocol dependency** — a receiver must be able to verify with no network access at all, which is already true of</p>
+<p>the reference implementation and must stay true.</p>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>Measured, published evidence of cost asymmetry in production traffic
+AND a measured legitimate-sender fallout figure
+AND at least one operator willing to let ESF contribute to scoring</code></pre>
+<p><strong>This is the stage that can end the project honestly.</strong> If pilots show that stamped mail correlates with nothing</p>
+<p>useful, or that fallout matches the 2004 prediction, that is the answer and it should be published as such.</p>
+<hr>
+<h2 id="stage-11-normative-specification-and-internet-draft">Stage 11 — Normative specification and Internet-Draft</h2>
+<p><strong>Prerequisite:</strong> Stage 10. Standardising before deployment evidence exists inverts the order that makes standards</p>
+<p>useful.</p>
+<p>Work: an Internet-Draft for the ESF-Stamp header field in BCP 14 language, derived from the Stage 2 specification and</p>
+<p>corrected by Stages 7, 8 and 10; a work-profile registry with explicit parameter semantics and a retirement process;</p>
+<p>separate operational guidance for difficulty policy, allowlists, mailing lists, forwarding and constrained devices.</p>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>A draft exists that an implementer prefers over this repository's documentation
+AND it is submitted for independent review in the relevant IETF venue
+AND every deviation of the reference implementations from the draft is a filed issue</code></pre>
+<hr>
+<h2 id="stage-12-registration-provider-adoption-esf-smtp">Stage 12 — Registration, provider adoption, ESF-SMTP</h2>
+<p><strong>Prerequisite:</strong> Stage 11.</p>
+<ul><li>Header field registration through the applicable IANA process, and the work-profile registry established.</li><li>Provider adoption, which will be gated on operator economics rather than on protocol quality: the argument that</li></ul>
+<p>reaches a large provider is measured spam reduction per unit of verification cost, from Stage 10.</p>
+<ul><li>The ESF-SMTP profile (whitepaper 9) as an experimental extension. It is last for a reason: it is the strongest</li></ul>
+<p>model — authoritative per-recipient accounting, no Bcc exposure, connection-bound challenges — and the one that</p>
+<p>cannot be adopted incrementally, because it needs both MTAs to move together. It becomes realistic only once</p>
+<p>message-level ESF is common enough that the envelope version is an optimisation rather than an introduction.</p>
+<p>Exit criteria:</p>
+<pre class="lang-text"><code>Registered field and profile registry
+AND at least one provider verifying at scale
+AND an experimental ESF-SMTP interoperating between independent MTAs</code></pre>
+<hr>
+<h2 id="guiding-principles">Guiding principles</h2>
+<p>Applied as tie-breakers whenever a stage offers a choice.</p>
+<p><strong>Integrability first.</strong> Every stage must be adoptable at one point in the mail path, alone, and provide value while</p>
+<p>everything adjacent remains unaware of ESF. Anything requiring simultaneous adoption is deferred to Stage 12.</p>
+<p><strong>Usability first.</strong> The user-facing surface stays green / yellow / red. No user is required to know what a nonce,</p>
+<p>difficulty, memory parameter or hash target is. And the optimum remains no user interface at all: the result belongs</p>
+<p>in the filtering that already decides where mail lands (whitepaper 4.2).</p>
+<p><strong>Open and neutral.</strong> Open source, vendor-neutral, patent-free where possible, no dependency on any central ESF</p>
+<p>service, locally verifiable, interoperable, algorithm-agile. Concretely: no stage may introduce a component that only</p>
+<p>this project can operate. If a stage would require an ESF-run server to work, the stage is wrong.</p>
+<p><strong>Absence stays neutral.</strong> Through every stage up to and including 12, a missing stamp is a non-signal, not evidence</p>
+<p>of abuse. This is what makes incremental adoption possible at all, and the first stage that breaks it will end</p>
+<p>adoption.</p>
+<p><strong>Evidence over advocacy.</strong> Where this roadmap states a number, it is measured or marked as an estimate to be</p>
+<p>replaced. The pilots may falsify the premise; that outcome is published, not buried.</p>
+<hr>
+<h2 id="cross-stage-dependencies-at-a-glance">Cross-stage dependencies at a glance</h2>
+<div class="table-scroll"><table>
+<thead><tr><th>Stage</th><th>Cannot start without</th><th>Delivers to</th></tr></thead><tbody>
+<tr><td>1 Stability</td><td>Stage 0</td><td>vectors and behaviour others can trust</td></tr>
+<tr><td>2 Core + spec</td><td>1</td><td>something implementable without this repository</td></tr>
+<tr><td>3 Developer package</td><td>2</td><td>external implementers, filter authors</td></tr>
+<tr><td>4 Client distribution</td><td>3</td><td>transport evidence, real users</td></tr>
+<tr><td>5 Filter integration</td><td>2, 4</td><td>the receiver side of the deadlock</td></tr>
+<tr><td>6 Outreach</td><td>3, 5</td><td>criticism, reviewers, implementers</td></tr>
+<tr><td>7 Independent implementation</td><td>3 (+6)</td><td>proof it is a protocol, ambiguity reports</td></tr>
+<tr><td>8 Security review</td><td>2, 5</td><td>a threat model that survived contact</td></tr>
+<tr><td>9 Operator engagement</td><td>5, 7, 8</td><td>deployment conditions</td></tr>
+<tr><td>10 Pilots</td><td>9</td><td>the numbers everything after depends on</td></tr>
+<tr><td>11 Internet-Draft</td><td>10</td><td>normative text</td></tr>
+<tr><td>12 Registration, providers, SMTP</td><td>11</td><td>ecosystem adoption</td></tr>
+</tbody></table></div>
+<h2 id="immediate-next-actions-in-order">Immediate next actions, in order</h2>
+<p>Derived from Stage 0 and Stage 1 only — everything further out depends on their outcome.</p>
+<ol><li>Continuous integration over both client suites and the shared vectors.</li><li><code>CONTRIBUTING.md</code> and <code>SECURITY.md</code>, including how to report a protocol flaw.</li><li>Extract <code>packages/esf-core</code>; both clients consume it; no client-to-client imports remain.</li><li>Implement the Argon2id profile, or state in the whitepaper that ESF v1 is single-profile until it exists.</li><li>Publish the benchmark harness that replaces the estimated figures in whitepaper 7.4 and D.10.</li><li>Split the normative wire format out of the whitepaper into its own specification document.</li></ol>
+
+<footer class="colophon">
+  ESF — End Spam Forever. Rendered from the canonical Markdown source (originally derived
+  from the v1.0 docx). Proof of work demonstrates computational effort — it is not sender authentication and not a
+  safety verdict.
+</footer>
+</div>
+</body>
+</html>
