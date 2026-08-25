@@ -150,6 +150,7 @@ footer.colophon { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid 
 <li class="level-3"><a href="#6-5-algorithm-agility-and-initial-work-profiles">6.5 Algorithm agility and initial work profiles</a></li>
 <li class="level-3"><a href="#6-6-generation">6.6 Generation</a></li>
 <li class="level-3"><a href="#6-7-verification">6.7 Verification</a></li>
+<li class="level-3"><a href="#6-7a-freshness-contemporaneity-not-expiry">6.7a Freshness: contemporaneity, not expiry</a></li>
 <li class="level-3"><a href="#6-8-replay-resistance">6.8 Replay resistance</a></li>
 <li class="level-3"><a href="#6-9-multiple-recipients-and-bcc">6.9 Multiple recipients and BCC</a></li>
 <li class="level-2"><a href="#7-difficulty-and-economic-model">7. Difficulty and economic model</a></li>
@@ -186,7 +187,7 @@ footer.colophon { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid 
 <li class="level-3"><a href="#d-7-bcc-handling-as-implemented">D.7 Bcc handling as implemented</a></li>
 <li class="level-3"><a href="#d-8-replay-ledger-scope">D.8 Replay ledger scope</a></li>
 <li class="level-3"><a href="#d-9-interoperability-discipline">D.9 Interoperability discipline</a></li>
-<li class="level-3"><a href="#d-10-measured-hash-rates-behind-the-section-7-4-model">D.10 Measured hash rates behind the section 7.4 model</a></li>
+<li class="level-3"><a href="#d-10-measured-hash-rates-behind-the-section-7-3-model">D.10 Measured hash rates behind the section 7.3 model</a></li>
 <li class="level-2"><a href="#references">References</a></li>
   </ul>
 </nav>
@@ -286,7 +287,7 @@ footer.colophon { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid 
 <tr><td>v</td><td>ESF protocol version</td><td>MUST be 1.</td></tr>
 <tr><td>alg</td><td>Registered work-function identifier</td><td>Initial ESF v1 profiles: sha256 and argon2id. Receivers decide which profiles they accept or prefer.</td></tr>
 <tr><td>d</td><td>Difficulty parameter</td><td>Profile-specific target difficulty. Values are not comparable across different algorithms.</td></tr>
-<tr><td>t</td><td>Stamp creation time</td><td>Unix time in UTC seconds.</td></tr>
+<tr><td>t</td><td>Stamp creation time</td><td>Unix time in UTC seconds. Receivers bound it against the message the stamp arrives with, not against their own clock; see 6.7a.</td></tr>
 <tr><td>sid</td><td>Sender binding token</td><td>Hash of canonical RFC5322.From mailbox used for anti-reuse binding.</td></tr>
 <tr><td>rid</td><td>Recipient binding token</td><td>Salted hash of canonical recipient mailbox; receiver recomputes locally.</td></tr>
 <tr><td>mid</td><td>Message binding token</td><td>Hash of normalized Message-ID value.</td></tr>
@@ -335,10 +336,31 @@ valid iff leading_zero_bits(h) &gt;= d</code></pre>
 <p>Serialize and attach the ESF-Stamp field without blocking the compose UI.</p>
 <h3 id="6-7-verification">6.7 Verification</h3>
 <p>Verification is deliberately ordered from cheapest to more expensive checks to prevent attacker-controlled headers from creating a receiver-side denial of service.</p>
-<ol><li>Enforce a strict maximum header size and a maximum number of ESF-Stamp fields.</li><li>Parse version, algorithm and numeric fields using bounded values; reject duplicates or ambiguous syntax.</li><li>Reject unsupported algorithms before performing cryptographic work.</li><li>Enforce local minimum and maximum acceptable difficulty; never trust an attacker-supplied difficulty as a reason to perform extra work.</li><li>Validate timestamp against local freshness and future-skew limits.</li><li>Recompute sid, rid and mid for the local message/recipient context.</li><li>Perform one work-function verification operation and compare the result with the claimed difficulty.</li><li>Check the replay cache before assigning a positive ESF result.</li></ol>
+<ol><li>Enforce a strict maximum header size and a maximum number of ESF-Stamp fields.</li><li>Parse version, algorithm and numeric fields using bounded values; reject duplicates or ambiguous syntax.</li><li>Reject unsupported algorithms before performing cryptographic work.</li><li>Enforce local minimum and maximum acceptable difficulty; never trust an attacker-supplied difficulty as a reason to perform extra work.</li><li>Validate the timestamp against the message the stamp arrives with, and against future-skew limits; see 6.7a.</li><li>Recompute sid, rid and mid for the local message/recipient context.</li><li>Perform one work-function verification operation and compare the result with the claimed difficulty.</li><li>Check the replay cache before assigning a positive ESF result.</li></ol>
 <p>Figure 2 - Stamp generation, verification and policy use.</p>
+<h3 id="6-7a-freshness-contemporaneity-not-expiry">6.7a Freshness: contemporaneity, not expiry</h3>
+<p>A stamp should be judged by whether its work belongs to <em>this</em> message, not by how much time has passed since it was</p>
+<p>produced. Receivers SHOULD therefore require that a stamp was minted within a bounded interval before the message</p>
+<p>came into being — a contemporaneity window, for which 24 hours is a reasonable starting value — and MAY additionally</p>
+<p>apply an absolute maximum age. The two are independent, and only the first carries a security property.</p>
+<p>The contemporaneity requirement is what keeps a sender paying as they go. Without it, an operator with spare capacity</p>
+<p>can mint stamps for months on idle hardware, or on cheap off-peak power, and release them in a single campaign: the</p>
+<p>total work per recipient is unchanged, but the <em>rate</em> at which work must be produced — the property that actually</p>
+<p>limits a campaign — disappears. A stockpiled stamp no longer matches the message it is attached to and is refused.</p>
+<p>An absolute expiry, by contrast, answers a question ESF does not ask. A proof of work does not become untrue with</p>
+<p>age, and a fixed window makes a correctly delivered message unverifiable later: mail delayed in a queue, held for</p>
+<p>moderation, or simply read from an archive months afterwards would be downgraded for reasons that have nothing to do</p>
+<p>with the sender's effort. Implementations SHOULD default to no absolute expiry and expose it as an option.</p>
+<p>Which instant counts as &quot;when the message came into being&quot; matters, because the Date header belongs to the sender.</p>
+<p>Receivers SHOULD prefer a timestamp they or their own infrastructure produced — the topmost Received field, or the</p>
+<p>delivery time recorded by the receiving system — and fall back to Date only when none is available. With a</p>
+<p>receiver-produced reference, back-dating a message to match a stockpiled stamp does not help the sender. Where only</p>
+<p>Date is available, a stockpiled stamp can still be smuggled through by back-dating the message, at the cost of the</p>
+<p>message presenting itself as old, which is a signal in its own right.</p>
+<p>Verification MUST NOT use the moment of <em>reading</em> as the reference. A receiver that compares a stamp against its</p>
+<p>current clock at display time will turn every stored message stale, reversing a result that was correct on arrival.</p>
 <h3 id="6-8-replay-resistance">6.8 Replay resistance</h3>
-<p>ESF does not need to cryptographically authenticate message content to achieve its principal economic goal, but it must prevent the same successful stamp from being accepted repeatedly for a recipient. Receivers SHOULD cache a compact stamp identifier for at least the accepted freshness window. A suitable identifier is SHA-256 of the canonical ESF-Stamp field. A second use for the same local recipient is classified as replay and receives no positive ESF credit.</p>
+<p>ESF does not need to cryptographically authenticate message content to achieve its principal economic goal, but it must prevent the same successful stamp from being accepted repeatedly for a recipient. Receivers SHOULD cache a compact stamp identifier for an explicit retention period. With no absolute acceptance window (6.7a) that retention cannot simply follow it, so it becomes a value of its own: replay detection is exact within the retention period and best effort beyond it. A suitable identifier is SHA-256 of the canonical ESF-Stamp field. A second use for the same local recipient is classified as replay and receives no positive ESF credit.</p>
 <p>Binding to Message-ID makes accidental stamp reuse across messages unlikely and raises the cost of intentional reuse. A future strict profile may additionally bind a DKIM-style canonical body hash; the trade-off is fragility when intermediaries modify content.</p>
 <h3 id="6-9-multiple-recipients-and-bcc">6.9 Multiple recipients and BCC</h3>
 <p>Recipient binding is where message-header PoW is inherently weaker than SMTP-envelope PoW. A message addressed to multiple visible To/Cc recipients may carry multiple ESF-Stamp fields, one per recipient. That causes work to scale with recipients, which is desirable. BCC is different: embedding a BCC recipient identifier in a common message can leak information about the hidden recipient.</p>
@@ -375,22 +397,22 @@ valid iff leading_zero_bits(h) &gt;= d</code></pre>
 <tr><td>Confirmed opt-in bulk sender</td><td>Receiver/provider exemption; do not waste computation merely because mail is bulk.</td></tr>
 </tbody></table></div>
 <h3 id="7-4-worked-example-cost-of-a-mid-size-campaign">7.4 Worked example: cost of a mid-size campaign</h3>
-<p>The following model quantifies the economic effect of both initial profiles on a mid-size bulk campaign of 10 million messages per day, one stamp per recipient. The single-threaded JavaScript rate is measured with the reference implementation (Appendix D.10); optimized-native, GPU and ASIC rates are literature and benchmark estimates that MUST be replaced by the Phase 0 benchmark campaign before any difficulty value is standardized.</p>
+<p>The following model quantifies the economic effect of both initial profiles on a mid-size bulk campaign of 10 million messages per day, one stamp per recipient. All monetary figures are US dollars and are order-of-magnitude estimates for rented capacity at roughly 0.02 USD per CPU core-hour, 0.35 USD per GPU-hour and 0.10 USD per kWh; they move with hardware and energy prices and MUST be re-derived by the Phase 0 benchmark campaign rather than quoted as results. The single-threaded JavaScript rate is measured with the reference implementation (Appendix D.10); optimized-native, GPU and ASIC rates are literature and benchmark estimates that MUST be replaced by the Phase 0 benchmark campaign before any difficulty value is standardized.</p>
 <p>Approximate SHA-256 rates per actor: legitimate client in a JavaScript runtime ~0.2 MH/s per thread (measured), optimized native code with SHA extensions ~10 MH/s per core, one current high-end GPU ~20 GH/s, one commodity hashing ASIC ~100 TH/s.</p>
 <div class="table-scroll"><table>
 <thead><tr><th>SHA-256, d=20 (2^20 ≈ 1.05M trials/recipient)</th><th>Sustained load for 10M msg/day</th><th>Estimated added cost per day</th></tr></thead><tbody>
-<tr><td>Rented cloud CPUs (native, SHA extensions)</td><td>~12 cores</td><td>~5-10 EUR</td></tr>
-<tr><td>One high-end GPU</td><td>~9 minutes of GPU time (&amp;lt;1% utilization)</td><td>~0.02 EUR electricity</td></tr>
+<tr><td>Rented cloud CPUs (native, SHA extensions)</td><td>~12 cores</td><td>~6-11 USD</td></tr>
+<tr><td>One high-end GPU</td><td>~9 minutes of GPU time (&amp;lt;1% utilization)</td><td>~0.02 USD electricity</td></tr>
 <tr><td>Hashing ASIC</td><td>~0.1 s of device time</td><td>negligible</td></tr>
 <tr><td>Botnet sending natively</td><td>throughput drops to ~5 msg/s per bot</td><td>victim pays energy; campaign duration x100+</td></tr>
 <tr><td>Stolen webmail accounts (JavaScript rate)</td><td>~1 msg per 5 s per bot</td><td>throughput reduced x1000</td></tr>
 </tbody></table></div>
-<p>The same difficulty costs a legitimate JavaScript client roughly five seconds per recipient. The asymmetry between that client and a GPU is therefore about five orders of magnitude: a compute-bound SHA-256 difficulty high enough to burden a GPU-equipped operator (roughly 34-35 bits for a four-digit EUR daily cost at this volume) would require hours per message from legitimate clients. Compute-bound difficulty alone cannot close this gap; it remains valuable as a portable bootstrap profile and as a throughput brake on botnets and abused accounts.</p>
+<p>The same difficulty costs a legitimate JavaScript client roughly five seconds per recipient. The asymmetry between that client and a GPU is therefore about five orders of magnitude: a compute-bound SHA-256 difficulty high enough to burden a GPU-equipped operator (roughly 34-35 bits for a four-digit USD daily cost at this volume) would require hours per message from legitimate clients. Compute-bound difficulty alone cannot close this gap; it remains valuable as a portable bootstrap profile and as a throughput brake on botnets and abused accounts.</p>
 <p>Argon2id changes the picture because every evaluation must fill the configured memory. With the illustrative profile m=16384 (16 MiB), t=1, lanes=1, d=8 (2^8 = 256 expected evaluations per recipient, each touching roughly 32 MB), estimated rates are ~15-25 evaluations/s in a browser/WASM client, ~30-50 per native CPU core, ~300-600 per multi-core server (memory bandwidth, not cores, is the bottleneck) and ~5,000-15,000 for one 24 GB high-end GPU whose advantage is bounded by memory bandwidth and data-dependent addressing. No commodity Argon2id ASIC exists; the theoretical specialized-hardware advantage is bounded by memory cost to an estimated factor of 2-10.</p>
 <div class="table-scroll"><table>
 <thead><tr><th>Argon2id m=16 MiB t=1 d=8, 10M msg/day (~30,000 evals/s sustained)</th><th>Sustained load</th><th>Estimated added cost per day</th></tr></thead><tbody>
-<tr><td>Rented cloud CPUs</td><td>~50-100 servers (bandwidth-bound)</td><td>~500-1,500 EUR</td></tr>
-<tr><td>High-end GPUs</td><td>~2-6 devices permanently</td><td>~20-60 EUR</td></tr>
+<tr><td>Rented cloud CPUs</td><td>~50-100 servers (bandwidth-bound)</td><td>~550-1,650 USD</td></tr>
+<tr><td>High-end GPUs</td><td>~2-6 devices permanently</td><td>~22-66 USD</td></tr>
 <tr><td>Specialized hardware</td><td>not commercially available; bounded advantage</td><td>capital-intensive, limited gain</td></tr>
 <tr><td>Botnet sending natively</td><td>~1 msg per 5-8 s per bot; 16 MiB peak RAM per attempt limits parallelism on weak hosts</td><td>campaign duration x1000</td></tr>
 </tbody></table></div>
@@ -404,7 +426,7 @@ valid iff leading_zero_bits(h) &gt;= d</code></pre>
 <tr><td>p</td><td>Receiver posture: none, optional, prefer, require.</td></tr>
 <tr><td>alg</td><td>Ordered list of accepted work profiles.</td></tr>
 <tr><td>d</td><td>Requested baseline difficulty for unknown senders.</td></tr>
-<tr><td>maxage</td><td>Maximum accepted stamp age in seconds.</td></tr>
+<tr><td>maxage</td><td>Contemporaneity window in seconds: how long before its message a stamp may have been minted (6.7a). Not an absolute expiry.</td></tr>
 <tr><td>contact</td><td>Optional HTTPS URI for ESF policy documentation; not required for validation.</td></tr>
 </tbody></table></div>
 <p>DNS policy is advisory in the initial client profile. A receiver always applies local policy at validation time. DNSSEC can protect the discovery record where deployed, but ESF must remain safe when DNS policy is unsigned: an attacker who removes or alters an advisory record must not gain cryptographic authority over receiver validation.</p>
@@ -473,12 +495,12 @@ S: 250 2.1.5 Recipient accepted</code></pre>
 <thead><tr><th>Threat</th><th>Effect</th><th>Mitigation / limitation</th></tr></thead><tbody>
 <tr><td>Proof replay</td><td>Attacker resends one successful stamp.</td><td>Recipient + Message-ID binding and replay cache.</td></tr>
 <tr><td>Cross-recipient reuse</td><td>One proof is sent to many mailboxes.</td><td>rid binding; authoritative prevention in ESF-SMTP.</td></tr>
-<tr><td>Precomputation</td><td>Work is generated before a campaign is known.</td><td>Random salt, timestamp, recipient binding; SMTP challenges later.</td></tr>
+<tr><td>Precomputation</td><td>Work is generated before a campaign is known.</td><td>Random salt, recipient binding and the contemporaneity window, which also denies the slower variant of stockpiling stamps over months; SMTP challenges later.</td></tr>
 <tr><td>Specialized hardware</td><td>Spam operator gets lower cost than normal users.</td><td>Algorithm agility; evaluate memory-/bandwidth-hard profiles.</td></tr>
 <tr><td>Botnets / stolen endpoints</td><td>Attacker externalizes computation onto victims.</td><td>ESF cannot eliminate this; account/reputation/security controls remain necessary.</td></tr>
 <tr><td>Header bombing</td><td>Many/huge ESF fields consume parser resources.</td><td>Strict count/size caps before cryptographic verification.</td></tr>
 <tr><td>Difficulty DoS</td><td>Attacker declares absurd difficulty.</td><td>Verifier uses local accepted bounds; verification is one bounded operation.</td></tr>
-<tr><td>Freshness manipulation</td><td>Old proofs are replayed.</td><td>Local max-age and future-clock-skew checks.</td></tr>
+<tr><td>Freshness manipulation</td><td>Old proofs are replayed.</td><td>Contemporaneity window against a receiver-produced timestamp, plus future-clock-skew checks (6.7a).</td></tr>
 <tr><td>BCC disclosure</td><td>Recipient token can reveal hidden recipient.</td><td>Per-BCC message copies; omit credit if unsafe; ESF-SMTP long-term.</td></tr>
 <tr><td>Malicious but funded sender</td><td>Attacker willingly pays work cost.</td><td>PoW is friction, not authentication; existing content/reputation controls continue.</td></tr>
 <tr><td>Forwarding/list mutation</td><td>Recipient binding or message context changes.</td><td>Trust intermediary, recompute downstream proofs, or treat original stamp as non-applicable.</td></tr>
@@ -541,6 +563,7 @@ profile-param = token &quot;=&quot; token
 ; The final Internet-Draft must define allowed parameters per registered profile.</code></pre>
 <h2 id="appendix-b-reference-verification-pseudocode">Appendix B - Reference verification pseudocode</h2>
 <pre class="lang-text"><code>function verifyEsfStamp(message, localRecipient, stamp, policy):
+    messageTime = min(receiverTimestamp(message) or message.date, now)
     if stamp.serializedLength &gt; policy.maxHeaderBytes: return INVALID
     if stamp.version != 1: return UNSUPPORTED
     profile = policy.profile(stamp.algorithm)
@@ -548,7 +571,9 @@ profile-param = token &quot;=&quot; token
     if !profile.parametersWithinBounds(stamp): return INVALID
     if stamp.difficulty &lt; profile.minDifficulty: return WEAK
     if stamp.difficulty &gt; profile.maxDeclaredDifficulty: return INVALID
-    if abs(now - stamp.timestamp) &gt; policy.maxAge: return STALE
+    if messageTime - stamp.timestamp &gt; policy.maxStampToMessage: return STAMP_TOO_OLD
+    if stamp.timestamp - messageTime &gt; policy.clockSkew: return FUTURE
+    if policy.maxAge and now - stamp.timestamp &gt; policy.maxAge: return STALE
     expectedSid = senderToken(message.from)
     expectedRid = recipientToken(localRecipient, stamp.salt)
     expectedMid = messageIdToken(message.messageId)
@@ -559,7 +584,7 @@ profile-param = token &quot;=&quot; token
     if replayCache.contains(stampId): return REPLAY
     digest = profile.verifyOneBoundedWork(canonicalWorkInput(stamp), stamp)
     if leadingZeroBits(digest) &lt; stamp.difficulty: return INVALID
-    replayCache.insert(stampId, expiry=stamp.timestamp + policy.maxAge)
+    replayCache.insert(stampId, expiry=now + policy.replayRetention)
     return STRONG</code></pre>
 <h2 id="appendix-c-reference-thunderbird-implementation-profile">Appendix C - Reference Thunderbird implementation profile</h2>
 <p>Use a current Thunderbird MailExtension / WebExtension architecture, not legacy XUL add-ons.</p>
@@ -627,7 +652,7 @@ profile-param = token &quot;=&quot; token
 <p>plus deterministic test vectors checked by both test suites, was the single most effective safeguard against protocol</p>
 <p>drift. Client adapters contain no protocol logic. Any future integration (webmail, gateway, MTA) should consume the</p>
 <p>same core and vectors rather than reimplementing the wire format.</p>
-<h3 id="d-10-measured-hash-rates-behind-the-section-7-4-model">D.10 Measured hash rates behind the section 7.4 model</h3>
+<h3 id="d-10-measured-hash-rates-behind-the-section-7-3-model">D.10 Measured hash rates behind the section 7.3 model</h3>
 <p>Measured on one mid-range Windows 11 desktop (Node.js 22, single thread, August 2026) with the reference core's own</p>
 <p>canonical work input: the bundled pure-JavaScript SHA-256 reaches ~198,000 H/s and per-call native hashing through the</p>
 <p>platform crypto API ~280,000 H/s, while WebCrypto's per-call async digest collapses to ~13,000 H/s - which is why the</p>
@@ -635,7 +660,7 @@ profile-param = token &quot;=&quot; token
 <p>consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient; a one-second</p>
 <p>per-recipient budget therefore fails d=18 about half the time (the success probability within budget t is</p>
 <p>1 - e^(-t * rate / 2^d)), so compute budgets and baseline difficulty MUST be calibrated together. The GPU, ASIC and</p>
-<p>Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values</p>
+<p>Argon2id numbers in section 7.3 are estimates from public benchmarks, not measurements; producing measured values</p>
 <p>across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.</p>
 <h2 id="references">References</h2>
 <ul><li><strong>[1]</strong> C. Dwork and M. Naor, “Pricing via Processing or Combatting Junk Mail,” CRYPTO 1992, LNCS 740, pp. 139-147.</li><li><strong>[2]</strong> A. Back, “Hashcash - A Denial of Service Counter-Measure,” 1 August 2002.</li><li><strong>[3]</strong> C. Dwork, A. Goldberg and M. Naor, “On Memory-Bound Functions for Fighting Spam,” CRYPTO 2003.</li><li><strong>[4]</strong> J. Klensin, RFC 5321, “Simple Mail Transfer Protocol,” October 2008.</li><li><strong>[5]</strong> P. Resnick, RFC 5322, “Internet Message Format,” October 2008.</li><li><strong>[6]</strong> P. Saint-Andre, D. Crocker and M. Nottingham, RFC 6648 / BCP 178, “Deprecating the X- Prefix and Similar Constructs in Application Protocols,” June 2012.</li><li><strong>[7]</strong> G. Klyne, M. Nottingham and J. Mogul, RFC 3864, “Registration Procedures for Message Header Fields,” September 2004.</li><li><strong>[8]</strong> T. Herr and J. Levine, RFC 9989, “Domain-Based Message Authentication, Reporting, and Conformance (DMARC),” 2026.</li><li><strong>[9]</strong> Thunderbird WebExtension API Documentation, compose and messages APIs, accessed August 2026.</li><li><strong>[10]</strong> D. Crocker, T. Hansen and M. Kucherawy, RFC 6376, “DomainKeys Identified Mail (DKIM) Signatures,” September 2011.</li><li><strong>[11]</strong> S. Kitterman, RFC 7208, “Sender Policy Framework (SPF) for Authorizing Use of Domains in Email, Version 1,” April 2014.</li><li><strong>[12]</strong> K. Andersen et al., RFC 8617, “The Authenticated Received Chain (ARC) Protocol,” July 2019.</li><li><strong>[13]</strong> A. Biryukov et al., RFC 9106, “Argon2 Memory-Hard Function for Password Hashing and Proof-of-Work Applications,” September 2021.</li><li><strong>[14]</strong> J. P. Lowery, “Softwar: A Novel Theory on Power Projection and the National Strategic Significance of Bitcoin,” Master's thesis, MIT System Design and Management Program, 2023.</li><li><strong>[15]</strong> S. Nakamoto, “Bitcoin: A Peer-to-Peer Electronic Cash System,” 2008.</li><li><strong>[16]</strong> Microsoft Office Add-ins documentation: internet headers on Outlook messages, Smart Alerts (OnMessageSend) and event-based activation, accessed August 2026.</li></ul>

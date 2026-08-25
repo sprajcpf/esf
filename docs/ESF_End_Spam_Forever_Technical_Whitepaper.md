@@ -150,7 +150,7 @@ The line folding above is illustrative. A real implementation must serialize the
 | v | ESF protocol version | MUST be 1. |
 | alg | Registered work-function identifier | Initial ESF v1 profiles: sha256 and argon2id. Receivers decide which profiles they accept or prefer. |
 | d | Difficulty parameter | Profile-specific target difficulty. Values are not comparable across different algorithms. |
-| t | Stamp creation time | Unix time in UTC seconds. |
+| t | Stamp creation time | Unix time in UTC seconds. Receivers bound it against the message the stamp arrives with, not against their own clock; see 6.7a. |
 | sid | Sender binding token | Hash of canonical RFC5322.From mailbox used for anti-reuse binding. |
 | rid | Recipient binding token | Salted hash of canonical recipient mailbox; receiver recomputes locally. |
 | mid | Message binding token | Hash of normalized Message-ID value. |
@@ -218,13 +218,39 @@ Verification is deliberately ordered from cheapest to more expensive checks to p
 2. Parse version, algorithm and numeric fields using bounded values; reject duplicates or ambiguous syntax.
 3. Reject unsupported algorithms before performing cryptographic work.
 4. Enforce local minimum and maximum acceptable difficulty; never trust an attacker-supplied difficulty as a reason to perform extra work.
-5. Validate timestamp against local freshness and future-skew limits.
+5. Validate the timestamp against the message the stamp arrives with, and against future-skew limits; see 6.7a.
 6. Recompute sid, rid and mid for the local message/recipient context.
 7. Perform one work-function verification operation and compare the result with the claimed difficulty.
 8. Check the replay cache before assigning a positive ESF result.
 Figure 2 - Stamp generation, verification and policy use.
+### 6.7a Freshness: contemporaneity, not expiry
+A stamp should be judged by whether its work belongs to *this* message, not by how much time has passed since it was
+produced. Receivers SHOULD therefore require that a stamp was minted within a bounded interval before the message
+came into being — a contemporaneity window, for which 24 hours is a reasonable starting value — and MAY additionally
+apply an absolute maximum age. The two are independent, and only the first carries a security property.
+
+The contemporaneity requirement is what keeps a sender paying as they go. Without it, an operator with spare capacity
+can mint stamps for months on idle hardware, or on cheap off-peak power, and release them in a single campaign: the
+total work per recipient is unchanged, but the *rate* at which work must be produced — the property that actually
+limits a campaign — disappears. A stockpiled stamp no longer matches the message it is attached to and is refused.
+
+An absolute expiry, by contrast, answers a question ESF does not ask. A proof of work does not become untrue with
+age, and a fixed window makes a correctly delivered message unverifiable later: mail delayed in a queue, held for
+moderation, or simply read from an archive months afterwards would be downgraded for reasons that have nothing to do
+with the sender's effort. Implementations SHOULD default to no absolute expiry and expose it as an option.
+
+Which instant counts as "when the message came into being" matters, because the Date header belongs to the sender.
+Receivers SHOULD prefer a timestamp they or their own infrastructure produced — the topmost Received field, or the
+delivery time recorded by the receiving system — and fall back to Date only when none is available. With a
+receiver-produced reference, back-dating a message to match a stockpiled stamp does not help the sender. Where only
+Date is available, a stockpiled stamp can still be smuggled through by back-dating the message, at the cost of the
+message presenting itself as old, which is a signal in its own right.
+
+Verification MUST NOT use the moment of *reading* as the reference. A receiver that compares a stamp against its
+current clock at display time will turn every stored message stale, reversing a result that was correct on arrival.
+
 ### 6.8 Replay resistance
-ESF does not need to cryptographically authenticate message content to achieve its principal economic goal, but it must prevent the same successful stamp from being accepted repeatedly for a recipient. Receivers SHOULD cache a compact stamp identifier for at least the accepted freshness window. A suitable identifier is SHA-256 of the canonical ESF-Stamp field. A second use for the same local recipient is classified as replay and receives no positive ESF credit.
+ESF does not need to cryptographically authenticate message content to achieve its principal economic goal, but it must prevent the same successful stamp from being accepted repeatedly for a recipient. Receivers SHOULD cache a compact stamp identifier for an explicit retention period. With no absolute acceptance window (6.7a) that retention cannot simply follow it, so it becomes a value of its own: replay detection is exact within the retention period and best effort beyond it. A suitable identifier is SHA-256 of the canonical ESF-Stamp field. A second use for the same local recipient is classified as replay and receives no positive ESF credit.
 
 Binding to Message-ID makes accidental stamp reuse across messages unlikely and raises the cost of intentional reuse. A future strict profile may additionally bind a DKIM-style canonical body hash; the trade-off is fragility when intermediaries modify content.
 ### 6.9 Multiple recipients and BCC
@@ -272,26 +298,26 @@ The most practical receiver policy does not charge every message equally. ESF is
 | Confirmed opt-in bulk sender | Receiver/provider exemption; do not waste computation merely because mail is bulk. |
 
 ### 7.4 Worked example: cost of a mid-size campaign
-The following model quantifies the economic effect of both initial profiles on a mid-size bulk campaign of 10 million messages per day, one stamp per recipient. The single-threaded JavaScript rate is measured with the reference implementation (Appendix D.10); optimized-native, GPU and ASIC rates are literature and benchmark estimates that MUST be replaced by the Phase 0 benchmark campaign before any difficulty value is standardized.
+The following model quantifies the economic effect of both initial profiles on a mid-size bulk campaign of 10 million messages per day, one stamp per recipient. All monetary figures are US dollars and are order-of-magnitude estimates for rented capacity at roughly 0.02 USD per CPU core-hour, 0.35 USD per GPU-hour and 0.10 USD per kWh; they move with hardware and energy prices and MUST be re-derived by the Phase 0 benchmark campaign rather than quoted as results. The single-threaded JavaScript rate is measured with the reference implementation (Appendix D.10); optimized-native, GPU and ASIC rates are literature and benchmark estimates that MUST be replaced by the Phase 0 benchmark campaign before any difficulty value is standardized.
 
 Approximate SHA-256 rates per actor: legitimate client in a JavaScript runtime ~0.2 MH/s per thread (measured), optimized native code with SHA extensions ~10 MH/s per core, one current high-end GPU ~20 GH/s, one commodity hashing ASIC ~100 TH/s.
 
 | SHA-256, d=20 (2^20 ≈ 1.05M trials/recipient) | Sustained load for 10M msg/day | Estimated added cost per day |
 | --- | --- | --- |
-| Rented cloud CPUs (native, SHA extensions) | ~12 cores | ~5-10 EUR |
-| One high-end GPU | ~9 minutes of GPU time (&lt;1% utilization) | ~0.02 EUR electricity |
+| Rented cloud CPUs (native, SHA extensions) | ~12 cores | ~6-11 USD |
+| One high-end GPU | ~9 minutes of GPU time (&lt;1% utilization) | ~0.02 USD electricity |
 | Hashing ASIC | ~0.1 s of device time | negligible |
 | Botnet sending natively | throughput drops to ~5 msg/s per bot | victim pays energy; campaign duration x100+ |
 | Stolen webmail accounts (JavaScript rate) | ~1 msg per 5 s per bot | throughput reduced x1000 |
 
-The same difficulty costs a legitimate JavaScript client roughly five seconds per recipient. The asymmetry between that client and a GPU is therefore about five orders of magnitude: a compute-bound SHA-256 difficulty high enough to burden a GPU-equipped operator (roughly 34-35 bits for a four-digit EUR daily cost at this volume) would require hours per message from legitimate clients. Compute-bound difficulty alone cannot close this gap; it remains valuable as a portable bootstrap profile and as a throughput brake on botnets and abused accounts.
+The same difficulty costs a legitimate JavaScript client roughly five seconds per recipient. The asymmetry between that client and a GPU is therefore about five orders of magnitude: a compute-bound SHA-256 difficulty high enough to burden a GPU-equipped operator (roughly 34-35 bits for a four-digit USD daily cost at this volume) would require hours per message from legitimate clients. Compute-bound difficulty alone cannot close this gap; it remains valuable as a portable bootstrap profile and as a throughput brake on botnets and abused accounts.
 
 Argon2id changes the picture because every evaluation must fill the configured memory. With the illustrative profile m=16384 (16 MiB), t=1, lanes=1, d=8 (2^8 = 256 expected evaluations per recipient, each touching roughly 32 MB), estimated rates are ~15-25 evaluations/s in a browser/WASM client, ~30-50 per native CPU core, ~300-600 per multi-core server (memory bandwidth, not cores, is the bottleneck) and ~5,000-15,000 for one 24 GB high-end GPU whose advantage is bounded by memory bandwidth and data-dependent addressing. No commodity Argon2id ASIC exists; the theoretical specialized-hardware advantage is bounded by memory cost to an estimated factor of 2-10.
 
 | Argon2id m=16 MiB t=1 d=8, 10M msg/day (~30,000 evals/s sustained) | Sustained load | Estimated added cost per day |
 | --- | --- | --- |
-| Rented cloud CPUs | ~50-100 servers (bandwidth-bound) | ~500-1,500 EUR |
-| High-end GPUs | ~2-6 devices permanently | ~20-60 EUR |
+| Rented cloud CPUs | ~50-100 servers (bandwidth-bound) | ~550-1,650 USD |
+| High-end GPUs | ~2-6 devices permanently | ~22-66 USD |
 | Specialized hardware | not commercially available; bounded advantage | capital-intensive, limited gain |
 | Botnet sending natively | ~1 msg per 5-8 s per bot; 16 MiB peak RAM per attempt limits parallelism on weak hosts | campaign duration x1000 |
 
@@ -309,7 +335,7 @@ _esf.example.org. 300 IN TXT "v=ESF1; p=optional; alg=argon2id,sha256; profile=d
 | p | Receiver posture: none, optional, prefer, require. |
 | alg | Ordered list of accepted work profiles. |
 | d | Requested baseline difficulty for unknown senders. |
-| maxage | Maximum accepted stamp age in seconds. |
+| maxage | Contemporaneity window in seconds: how long before its message a stamp may have been minted (6.7a). Not an absolute expiry. |
 | contact | Optional HTTPS URI for ESF policy documentation; not required for validation. |
 
 DNS policy is advisory in the initial client profile. A receiver always applies local policy at validation time. DNSSEC can protect the discovery record where deployed, but ESF must remain safe when DNS policy is unsigned: an attacker who removes or alters an advisory record must not gain cryptographic authority over receiver validation.
@@ -399,12 +425,12 @@ Technical information such as Algorithm: Argon2id, Difficulty, Required threshol
 | --- | --- | --- |
 | Proof replay | Attacker resends one successful stamp. | Recipient + Message-ID binding and replay cache. |
 | Cross-recipient reuse | One proof is sent to many mailboxes. | rid binding; authoritative prevention in ESF-SMTP. |
-| Precomputation | Work is generated before a campaign is known. | Random salt, timestamp, recipient binding; SMTP challenges later. |
+| Precomputation | Work is generated before a campaign is known. | Random salt, recipient binding and the contemporaneity window, which also denies the slower variant of stockpiling stamps over months; SMTP challenges later. |
 | Specialized hardware | Spam operator gets lower cost than normal users. | Algorithm agility; evaluate memory-/bandwidth-hard profiles. |
 | Botnets / stolen endpoints | Attacker externalizes computation onto victims. | ESF cannot eliminate this; account/reputation/security controls remain necessary. |
 | Header bombing | Many/huge ESF fields consume parser resources. | Strict count/size caps before cryptographic verification. |
 | Difficulty DoS | Attacker declares absurd difficulty. | Verifier uses local accepted bounds; verification is one bounded operation. |
-| Freshness manipulation | Old proofs are replayed. | Local max-age and future-clock-skew checks. |
+| Freshness manipulation | Old proofs are replayed. | Contemporaneity window against a receiver-produced timestamp, plus future-clock-skew checks (6.7a). |
 | BCC disclosure | Recipient token can reveal hidden recipient. | Per-BCC message copies; omit credit if unsafe; ESF-SMTP long-term. |
 | Malicious but funded sender | Attacker willingly pays work cost. | PoW is friction, not authentication; existing content/reputation controls continue. |
 | Forwarding/list mutation | Recipient binding or message context changes. | Trust intermediary, recompute downstream proofs, or treat original stamp as non-applicable. |
@@ -491,6 +517,7 @@ profile-param = token "=" token
 ## Appendix B - Reference verification pseudocode
 ```text
 function verifyEsfStamp(message, localRecipient, stamp, policy):
+    messageTime = min(receiverTimestamp(message) or message.date, now)
     if stamp.serializedLength > policy.maxHeaderBytes: return INVALID
     if stamp.version != 1: return UNSUPPORTED
     profile = policy.profile(stamp.algorithm)
@@ -498,7 +525,9 @@ function verifyEsfStamp(message, localRecipient, stamp, policy):
     if !profile.parametersWithinBounds(stamp): return INVALID
     if stamp.difficulty < profile.minDifficulty: return WEAK
     if stamp.difficulty > profile.maxDeclaredDifficulty: return INVALID
-    if abs(now - stamp.timestamp) > policy.maxAge: return STALE
+    if messageTime - stamp.timestamp > policy.maxStampToMessage: return STAMP_TOO_OLD
+    if stamp.timestamp - messageTime > policy.clockSkew: return FUTURE
+    if policy.maxAge and now - stamp.timestamp > policy.maxAge: return STALE
     expectedSid = senderToken(message.from)
     expectedRid = recipientToken(localRecipient, stamp.salt)
     expectedMid = messageIdToken(message.messageId)
@@ -509,7 +538,7 @@ function verifyEsfStamp(message, localRecipient, stamp, policy):
     if replayCache.contains(stampId): return REPLAY
     digest = profile.verifyOneBoundedWork(canonicalWorkInput(stamp), stamp)
     if leadingZeroBits(digest) < stamp.difficulty: return INVALID
-    replayCache.insert(stampId, expiry=stamp.timestamp + policy.maxAge)
+    replayCache.insert(stampId, expiry=now + policy.replayRetention)
     return STRONG
 ```
 ## Appendix C - Reference Thunderbird implementation profile
@@ -593,7 +622,7 @@ plus deterministic test vectors checked by both test suites, was the single most
 drift. Client adapters contain no protocol logic. Any future integration (webmail, gateway, MTA) should consume the
 same core and vectors rather than reimplementing the wire format.
 
-### D.10 Measured hash rates behind the section 7.4 model
+### D.10 Measured hash rates behind the section 7.3 model
 Measured on one mid-range Windows 11 desktop (Node.js 22, single thread, August 2026) with the reference core's own
 canonical work input: the bundled pure-JavaScript SHA-256 reaches ~198,000 H/s and per-call native hashing through the
 platform crypto API ~280,000 H/s, while WebCrypto's per-call async digest collapses to ~13,000 H/s - which is why the
@@ -601,7 +630,7 @@ nonce search uses the synchronous implementation and reserves WebCrypto for one-
 consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient; a one-second
 per-recipient budget therefore fails d=18 about half the time (the success probability within budget t is
 1 - e^(-t * rate / 2^d)), so compute budgets and baseline difficulty MUST be calibrated together. The GPU, ASIC and
-Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values
+Argon2id numbers in section 7.3 are estimates from public benchmarks, not measurements; producing measured values
 across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.
 
 ## References
