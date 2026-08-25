@@ -156,6 +156,7 @@ footer.colophon { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid 
 <li class="level-3"><a href="#7-1-difficulty-is-policy-not-a-universal-constant">7.1 Difficulty is policy, not a universal constant</a></li>
 <li class="level-3"><a href="#7-2-initial-profiles-sha-256-and-argon2id">7.2 Initial profiles: SHA-256 and Argon2id</a></li>
 <li class="level-3"><a href="#7-3-trust-aware-difficulty">7.3 Trust-aware difficulty</a></li>
+<li class="level-3"><a href="#7-4-worked-example-cost-of-a-mid-size-campaign">7.4 Worked example: cost of a mid-size campaign</a></li>
 <li class="level-2"><a href="#8-receiver-policy-discovery">8. Receiver policy discovery</a></li>
 <li class="level-2"><a href="#9-future-esf-smtp-profile">9. Future ESF-SMTP profile</a></li>
 <li class="level-2"><a href="#10-integration-profiles">10. Integration profiles</a></li>
@@ -185,6 +186,7 @@ footer.colophon { margin-top: 4rem; padding-top: 1.25rem; border-top: 1px solid 
 <li class="level-3"><a href="#d-7-bcc-handling-as-implemented">D.7 Bcc handling as implemented</a></li>
 <li class="level-3"><a href="#d-8-replay-ledger-scope">D.8 Replay ledger scope</a></li>
 <li class="level-3"><a href="#d-9-interoperability-discipline">D.9 Interoperability discipline</a></li>
+<li class="level-3"><a href="#d-10-measured-hash-rates-behind-the-section-7-4-model">D.10 Measured hash rates behind the section 7.4 model</a></li>
 <li class="level-2"><a href="#references">References</a></li>
   </ul>
 </nav>
@@ -372,6 +374,27 @@ valid iff leading_zero_bits(h) &gt;= d</code></pre>
 <tr><td>Low-reputation / suspicious stream</td><td>Higher PoW requirement or quarantine.</td></tr>
 <tr><td>Confirmed opt-in bulk sender</td><td>Receiver/provider exemption; do not waste computation merely because mail is bulk.</td></tr>
 </tbody></table></div>
+<h3 id="7-4-worked-example-cost-of-a-mid-size-campaign">7.4 Worked example: cost of a mid-size campaign</h3>
+<p>The following model quantifies the economic effect of both initial profiles on a mid-size bulk campaign of 10 million messages per day, one stamp per recipient. The single-threaded JavaScript rate is measured with the reference implementation (Appendix D.10); optimized-native, GPU and ASIC rates are literature and benchmark estimates that MUST be replaced by the Phase 0 benchmark campaign before any difficulty value is standardized.</p>
+<p>Approximate SHA-256 rates per actor: legitimate client in a JavaScript runtime ~0.2 MH/s per thread (measured), optimized native code with SHA extensions ~10 MH/s per core, one current high-end GPU ~20 GH/s, one commodity hashing ASIC ~100 TH/s.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>SHA-256, d=20 (2^20 ≈ 1.05M trials/recipient)</th><th>Sustained load for 10M msg/day</th><th>Estimated added cost per day</th></tr></thead><tbody>
+<tr><td>Rented cloud CPUs (native, SHA extensions)</td><td>~12 cores</td><td>~5-10 EUR</td></tr>
+<tr><td>One high-end GPU</td><td>~9 minutes of GPU time (&amp;lt;1% utilization)</td><td>~0.02 EUR electricity</td></tr>
+<tr><td>Hashing ASIC</td><td>~0.1 s of device time</td><td>negligible</td></tr>
+<tr><td>Botnet sending natively</td><td>throughput drops to ~5 msg/s per bot</td><td>victim pays energy; campaign duration x100+</td></tr>
+<tr><td>Stolen webmail accounts (JavaScript rate)</td><td>~1 msg per 5 s per bot</td><td>throughput reduced x1000</td></tr>
+</tbody></table></div>
+<p>The same difficulty costs a legitimate JavaScript client roughly five seconds per recipient. The asymmetry between that client and a GPU is therefore about five orders of magnitude: a compute-bound SHA-256 difficulty high enough to burden a GPU-equipped operator (roughly 34-35 bits for a four-digit EUR daily cost at this volume) would require hours per message from legitimate clients. Compute-bound difficulty alone cannot close this gap; it remains valuable as a portable bootstrap profile and as a throughput brake on botnets and abused accounts.</p>
+<p>Argon2id changes the picture because every evaluation must fill the configured memory. With the illustrative profile m=16384 (16 MiB), t=1, lanes=1, d=8 (2^8 = 256 expected evaluations per recipient, each touching roughly 32 MB), estimated rates are ~15-25 evaluations/s in a browser/WASM client, ~30-50 per native CPU core, ~300-600 per multi-core server (memory bandwidth, not cores, is the bottleneck) and ~5,000-15,000 for one 24 GB high-end GPU whose advantage is bounded by memory bandwidth and data-dependent addressing. No commodity Argon2id ASIC exists; the theoretical specialized-hardware advantage is bounded by memory cost to an estimated factor of 2-10.</p>
+<div class="table-scroll"><table>
+<thead><tr><th>Argon2id m=16 MiB t=1 d=8, 10M msg/day (~30,000 evals/s sustained)</th><th>Sustained load</th><th>Estimated added cost per day</th></tr></thead><tbody>
+<tr><td>Rented cloud CPUs</td><td>~50-100 servers (bandwidth-bound)</td><td>~500-1,500 EUR</td></tr>
+<tr><td>High-end GPUs</td><td>~2-6 devices permanently</td><td>~20-60 EUR</td></tr>
+<tr><td>Specialized hardware</td><td>not commercially available; bounded advantage</td><td>capital-intensive, limited gain</td></tr>
+<tr><td>Botnet sending natively</td><td>~1 msg per 5-8 s per bot; 16 MiB peak RAM per attempt limits parallelism on weak hosts</td><td>campaign duration x1000</td></tr>
+</tbody></table></div>
+<p>The user-visible cost of this Argon2id profile (~10-15 s per recipient in a WASM client) is comparable to SHA-256 at d=20-22, but the client-to-GPU asymmetry shrinks from ~10^5 to an estimated factor of ~300. Parameters scale the effect linearly: quadrupling memory quadruples attacker cost without forcing a quadrupled user wait, because the receiver policy can lower d in exchange. Two costs must be engineered deliberately: verification of one Argon2id stamp costs the receiver tens of milliseconds and the configured memory rather than microseconds, which makes the bounds of section 6.7 and a memory cap mandatory before any Argon2id verification is attempted (section 16); and constrained devices need the delegation and limit mechanisms of section 13.</p>
 <h2 id="8-receiver-policy-discovery">8. Receiver policy discovery</h2>
 <p>A sender needs to know what work is useful before transmitting a message. ESF proposes DNS discovery as an optional first-stage mechanism because it is cacheable, decentralized and already familiar to email operators through SPF, DKIM and DMARC. This is a proposal for experimentation, not yet a registered DNS scheme.</p>
 <pre class="lang-text"><code>_esf.example.org. 300 IN TXT &quot;v=ESF1; p=optional; alg=argon2id,sha256; profile=default; maxage=604800&quot;</code></pre>
@@ -604,6 +627,16 @@ profile-param = token &quot;=&quot; token
 <p>plus deterministic test vectors checked by both test suites, was the single most effective safeguard against protocol</p>
 <p>drift. Client adapters contain no protocol logic. Any future integration (webmail, gateway, MTA) should consume the</p>
 <p>same core and vectors rather than reimplementing the wire format.</p>
+<h3 id="d-10-measured-hash-rates-behind-the-section-7-4-model">D.10 Measured hash rates behind the section 7.4 model</h3>
+<p>Measured on one mid-range Windows 11 desktop (Node.js 22, single thread, August 2026) with the reference core's own</p>
+<p>canonical work input: the bundled pure-JavaScript SHA-256 reaches ~198,000 H/s and per-call native hashing through the</p>
+<p>platform crypto API ~280,000 H/s, while WebCrypto's per-call async digest collapses to ~13,000 H/s - which is why the</p>
+<p>nonce search uses the synchronous implementation and reserves WebCrypto for one-shot token derivation. Practical</p>
+<p>consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient; a one-second</p>
+<p>per-recipient budget therefore fails d=18 about half the time (the success probability within budget t is</p>
+<p>1 - e^(-t * rate / 2^d)), so compute budgets and baseline difficulty MUST be calibrated together. The GPU, ASIC and</p>
+<p>Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values</p>
+<p>across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.</p>
 <h2 id="references">References</h2>
 <ul><li><strong>[1]</strong> C. Dwork and M. Naor, “Pricing via Processing or Combatting Junk Mail,” CRYPTO 1992, LNCS 740, pp. 139-147.</li><li><strong>[2]</strong> A. Back, “Hashcash - A Denial of Service Counter-Measure,” 1 August 2002.</li><li><strong>[3]</strong> C. Dwork, A. Goldberg and M. Naor, “On Memory-Bound Functions for Fighting Spam,” CRYPTO 2003.</li><li><strong>[4]</strong> J. Klensin, RFC 5321, “Simple Mail Transfer Protocol,” October 2008.</li><li><strong>[5]</strong> P. Resnick, RFC 5322, “Internet Message Format,” October 2008.</li><li><strong>[6]</strong> P. Saint-Andre, D. Crocker and M. Nottingham, RFC 6648 / BCP 178, “Deprecating the X- Prefix and Similar Constructs in Application Protocols,” June 2012.</li><li><strong>[7]</strong> G. Klyne, M. Nottingham and J. Mogul, RFC 3864, “Registration Procedures for Message Header Fields,” September 2004.</li><li><strong>[8]</strong> T. Herr and J. Levine, RFC 9989, “Domain-Based Message Authentication, Reporting, and Conformance (DMARC),” 2026.</li><li><strong>[9]</strong> Thunderbird WebExtension API Documentation, compose and messages APIs, accessed August 2026.</li><li><strong>[10]</strong> D. Crocker, T. Hansen and M. Kucherawy, RFC 6376, “DomainKeys Identified Mail (DKIM) Signatures,” September 2011.</li><li><strong>[11]</strong> S. Kitterman, RFC 7208, “Sender Policy Framework (SPF) for Authorizing Use of Domains in Email, Version 1,” April 2014.</li><li><strong>[12]</strong> K. Andersen et al., RFC 8617, “The Authenticated Received Chain (ARC) Protocol,” July 2019.</li><li><strong>[13]</strong> A. Biryukov et al., RFC 9106, “Argon2 Memory-Hard Function for Password Hashing and Proof-of-Work Applications,” September 2021.</li><li><strong>[14]</strong> J. P. Lowery, “Softwar: A Novel Theory on Power Projection and the National Strategic Significance of Bitcoin,” Master's thesis, MIT System Design and Management Program, 2023.</li><li><strong>[15]</strong> S. Nakamoto, “Bitcoin: A Peer-to-Peer Electronic Cash System,” 2008.</li><li><strong>[16]</strong> Microsoft Office Add-ins documentation: internet headers on Outlook messages, Smart Alerts (OnMessageSend) and event-based activation, accessed August 2026.</li></ul>
 

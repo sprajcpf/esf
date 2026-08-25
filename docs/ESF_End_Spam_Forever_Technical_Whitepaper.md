@@ -271,6 +271,32 @@ The most practical receiver policy does not charge every message equally. ESF is
 | Low-reputation / suspicious stream | Higher PoW requirement or quarantine. |
 | Confirmed opt-in bulk sender | Receiver/provider exemption; do not waste computation merely because mail is bulk. |
 
+### 7.4 Worked example: cost of a mid-size campaign
+The following model quantifies the economic effect of both initial profiles on a mid-size bulk campaign of 10 million messages per day, one stamp per recipient. The single-threaded JavaScript rate is measured with the reference implementation (Appendix D.10); optimized-native, GPU and ASIC rates are literature and benchmark estimates that MUST be replaced by the Phase 0 benchmark campaign before any difficulty value is standardized.
+
+Approximate SHA-256 rates per actor: legitimate client in a JavaScript runtime ~0.2 MH/s per thread (measured), optimized native code with SHA extensions ~10 MH/s per core, one current high-end GPU ~20 GH/s, one commodity hashing ASIC ~100 TH/s.
+
+| SHA-256, d=20 (2^20 ≈ 1.05M trials/recipient) | Sustained load for 10M msg/day | Estimated added cost per day |
+| --- | --- | --- |
+| Rented cloud CPUs (native, SHA extensions) | ~12 cores | ~5-10 EUR |
+| One high-end GPU | ~9 minutes of GPU time (&lt;1% utilization) | ~0.02 EUR electricity |
+| Hashing ASIC | ~0.1 s of device time | negligible |
+| Botnet sending natively | throughput drops to ~5 msg/s per bot | victim pays energy; campaign duration x100+ |
+| Stolen webmail accounts (JavaScript rate) | ~1 msg per 5 s per bot | throughput reduced x1000 |
+
+The same difficulty costs a legitimate JavaScript client roughly five seconds per recipient. The asymmetry between that client and a GPU is therefore about five orders of magnitude: a compute-bound SHA-256 difficulty high enough to burden a GPU-equipped operator (roughly 34-35 bits for a four-digit EUR daily cost at this volume) would require hours per message from legitimate clients. Compute-bound difficulty alone cannot close this gap; it remains valuable as a portable bootstrap profile and as a throughput brake on botnets and abused accounts.
+
+Argon2id changes the picture because every evaluation must fill the configured memory. With the illustrative profile m=16384 (16 MiB), t=1, lanes=1, d=8 (2^8 = 256 expected evaluations per recipient, each touching roughly 32 MB), estimated rates are ~15-25 evaluations/s in a browser/WASM client, ~30-50 per native CPU core, ~300-600 per multi-core server (memory bandwidth, not cores, is the bottleneck) and ~5,000-15,000 for one 24 GB high-end GPU whose advantage is bounded by memory bandwidth and data-dependent addressing. No commodity Argon2id ASIC exists; the theoretical specialized-hardware advantage is bounded by memory cost to an estimated factor of 2-10.
+
+| Argon2id m=16 MiB t=1 d=8, 10M msg/day (~30,000 evals/s sustained) | Sustained load | Estimated added cost per day |
+| --- | --- | --- |
+| Rented cloud CPUs | ~50-100 servers (bandwidth-bound) | ~500-1,500 EUR |
+| High-end GPUs | ~2-6 devices permanently | ~20-60 EUR |
+| Specialized hardware | not commercially available; bounded advantage | capital-intensive, limited gain |
+| Botnet sending natively | ~1 msg per 5-8 s per bot; 16 MiB peak RAM per attempt limits parallelism on weak hosts | campaign duration x1000 |
+
+The user-visible cost of this Argon2id profile (~10-15 s per recipient in a WASM client) is comparable to SHA-256 at d=20-22, but the client-to-GPU asymmetry shrinks from ~10^5 to an estimated factor of ~300. Parameters scale the effect linearly: quadrupling memory quadruples attacker cost without forcing a quadrupled user wait, because the receiver policy can lower d in exchange. Two costs must be engineered deliberately: verification of one Argon2id stamp costs the receiver tens of milliseconds and the configured memory rather than microseconds, which makes the bounds of section 6.7 and a memory cap mandatory before any Argon2id verification is attempted (section 16); and constrained devices need the delegation and limit mechanisms of section 13.
+
 ## 8. Receiver policy discovery
 A sender needs to know what work is useful before transmitting a message. ESF proposes DNS discovery as an optional first-stage mechanism because it is cacheable, decentralized and already familiar to email operators through SPF, DKIM and DMARC. This is a proposal for experimentation, not yet a registered DNS scheme.
 ```text
@@ -566,6 +592,17 @@ A single client-neutral protocol core (constants, canonicalization, parser, veri
 plus deterministic test vectors checked by both test suites, was the single most effective safeguard against protocol
 drift. Client adapters contain no protocol logic. Any future integration (webmail, gateway, MTA) should consume the
 same core and vectors rather than reimplementing the wire format.
+
+### D.10 Measured hash rates behind the section 7.4 model
+Measured on one mid-range Windows 11 desktop (Node.js 22, single thread, August 2026) with the reference core's own
+canonical work input: the bundled pure-JavaScript SHA-256 reaches ~198,000 H/s and per-call native hashing through the
+platform crypto API ~280,000 H/s, while WebCrypto's per-call async digest collapses to ~13,000 H/s - which is why the
+nonce search uses the synchronous implementation and reserves WebCrypto for one-shot token derivation. Practical
+consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient; a one-second
+per-recipient budget therefore fails d=18 about half the time (the success probability within budget t is
+1 - e^(-t * rate / 2^d)), so compute budgets and baseline difficulty MUST be calibrated together. The GPU, ASIC and
+Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values
+across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.
 
 ## References
 - **[1]** C. Dwork and M. Naor, “Pricing via Processing or Combatting Junk Mail,” CRYPTO 1992, LNCS 740, pp. 139-147.
