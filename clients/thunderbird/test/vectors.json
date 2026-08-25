@@ -1,0 +1,67 @@
+[
+  {
+    "name": "8-bit",
+    "recipient": "alice@example.com",
+    "hiddenRecipient": false,
+    "timestamp": "20260825T103800Z",
+    "messageId": "6f1a2c34-0000-4000-8000-000000000001@esf.invalid",
+    "salt": "8f2c1d4ea7b3906512c0de77a15be340",
+    "bits": 8,
+    "nonce": "120",
+    "hash": "00faaa972e345af6274998b83b502458778c1c791ec882d3b6845d47c7bb7080",
+    "preimage": "1|alice@example.com|20260825T103800Z|6f1a2c34-0000-4000-8000-000000000001@esf.invalid|8f2c1d4ea7b3906512c0de77a15be340|120",
+    "header": "v=1; alg=sha256; bits=8; ts=20260825T103800Z; rcpt=alice@example.com; mid=6f1a2c34-0000-4000-8000-000000000001@esf.invalid; nonce=120; salt=8f2c1d4ea7b3906512c0de77a15be340"
+  },
+  {
+    "name": "12-bit",
+    "recipient": "alice@example.com",
+    "hiddenRecipient": false,
+    "timestamp": "20260825T103800Z",
+    "messageId": "6f1a2c34-0000-4000-8000-000000000001@esf.invalid",
+    "salt": "8f2c1d4ea7b3906512c0de77a15be340",
+    "bits": 12,
+    "nonce": "2300",
+    "hash": "0009f0aad6a6588597b5b9b731801032437449385b3a06534f6f6f7ca77cda15",
+    "preimage": "1|alice@example.com|20260825T103800Z|6f1a2c34-0000-4000-8000-000000000001@esf.invalid|8f2c1d4ea7b3906512c0de77a15be340|2300",
+    "header": "v=1; alg=sha256; bits=12; ts=20260825T103800Z; rcpt=alice@example.com; mid=6f1a2c34-0000-4000-8000-000000000001@esf.invalid; nonce=2300; salt=8f2c1d4ea7b3906512c0de77a15be340"
+  },
+  {
+    "name": "16-bit",
+    "recipient": "bob@example.org",
+    "hiddenRecipient": false,
+    "timestamp": "20260825T103800Z",
+    "messageId": "6f1a2c34-0000-4000-8000-000000000001@esf.invalid",
+    "salt": "8f2c1d4ea7b3906512c0de77a15be340",
+    "bits": 16,
+    "nonce": "171823",
+    "hash": "0000074b93e9c38825d608e728302fe6f31fe1646c8a2e1b8c29cd6e50a7ecb5",
+    "preimage": "1|bob@example.org|20260825T103800Z|6f1a2c34-0000-4000-8000-000000000001@esf.invalid|8f2c1d4ea7b3906512c0de77a15be340|171823",
+    "header": "v=1; alg=sha256; bits=16; ts=20260825T103800Z; rcpt=bob@example.org; mid=6f1a2c34-0000-4000-8000-000000000001@esf.invalid; nonce=171823; salt=8f2c1d4ea7b3906512c0de77a15be340"
+  },
+  {
+    "name": "20-bit",
+    "recipient": "carol@example.net",
+    "hiddenRecipient": false,
+    "timestamp": "20260825T103800Z",
+    "messageId": "6f1a2c34-0000-4000-8000-000000000001@esf.invalid",
+    "salt": "8f2c1d4ea7b3906512c0de77a15be340",
+    "bits": 20,
+    "nonce": "313932",
+    "hash": "0000077c6f2b66a5315fc8a2c7349cf5a7403eda4421ba0035ae7cc9822d05b6",
+    "preimage": "1|carol@example.net|20260825T103800Z|6f1a2c34-0000-4000-8000-000000000001@esf.invalid|8f2c1d4ea7b3906512c0de77a15be340|313932",
+    "header": "v=1; alg=sha256; bits=20; ts=20260825T103800Z; rcpt=carol@example.net; mid=6f1a2c34-0000-4000-8000-000000000001@esf.invalid; nonce=313932; salt=8f2c1d4ea7b3906512c0de77a15be340"
+  },
+  {
+    "name": "20-bit-hidden-recipient",
+    "recipient": "dave@example.net",
+    "hiddenRecipient": true,
+    "timestamp": "20260825T103800Z",
+    "messageId": "6f1a2c34-0000-4000-8000-000000000001@esf.invalid",
+    "salt": "8f2c1d4ea7b3906512c0de77a15be340",
+    "bits": 20,
+    "nonce": "1194511",
+    "hash": "00000f9582b2de1e5eef5ee5245963bf5bf60dffe4b01210336de91bb30bbf8e",
+    "preimage": "1|dave@example.net|20260825T103800Z|6f1a2c34-0000-4000-8000-000000000001@esf.invalid|8f2c1d4ea7b3906512c0de77a15be340|1194511",
+    "header": "v=1; alg=sha256; bits=20; ts=20260825T103800Z; rid=7df6fc410cd8b0561bd2e6513e461c647ca05c3e3a4722e771a37aec27b92100; mid=6f1a2c34-0000-4000-8000-000000000001@esf.invalid; nonce=1194511; salt=8f2c1d4ea7b3906512c0de77a15be340"
+  }
+]

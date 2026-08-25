@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Proof of Work</title>
+  <link rel="stylesheet" href="../ui/common.css">
+</head>
+<body>
+  <h1>Proof of Work</h1>
+
+  <div class="status" id="status"><span class="dot"></span><span id="statusText">…</span></div>
+  <progress id="progress" class="hidden"></progress>
+
+  <dl class="details" id="details"></dl>
+
+  <div class="actions hidden" id="askActions">
+    <button class="primary" data-decision="continue">Continue calculating</button>
+    <button data-decision="send-without">Send without PoW</button>
+    <button data-decision="cancel">Cancel send</button>
+  </div>
+
+  <div class="actions" id="runActions">
+    <button id="abort">Stop and cancel send</button>
+    <button id="options">Settings…</button>
+  </div>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

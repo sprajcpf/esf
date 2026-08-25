@@ -1,0 +1,14 @@
+{
+  "name": "esf-thunderbird",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "ESF — End-Spam-Forever: Proof-of-Work MailExtension for Thunderbird",
+  "scripts": {
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "vectors": "node tools/generate-vectors.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

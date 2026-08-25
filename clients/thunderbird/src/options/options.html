@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ESF — Proof of Work settings</title>
+  <link rel="stylesheet" href="../ui/common.css">
+  <link rel="stylesheet" href="options.css">
+</head>
+<body class="options">
+  <h1>End-Spam-Forever — Proof of Work</h1>
+  <p class="hint">
+    A proof of work shows that a sender spent measurable CPU time on this specific message and recipient. It is a
+    cost signal, not authentication: it says nothing about <em>who</em> sent the mail.
+  </p>
+
+  <form id="form">
+    <fieldset>
+      <legend>Outgoing</legend>
+
+      <label class="check">
+        <input type="checkbox" name="enabled">
+        <span>Enable Proof of Work for outgoing messages</span>
+      </label>
+
+      <label>
+        <span>Outgoing difficulty</span>
+        <select name="outgoingBits">
+          <option value="0">Disabled</option>
+          <option value="18">18 bits</option>
+          <option value="20">20 bits</option>
+          <option value="22">22 bits (default)</option>
+          <option value="24">24 bits</option>
+          <option value="26">26 bits</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Maximum computation time</span>
+        <span class="inline"><input type="number" name="maxComputeSeconds" min="1" max="120" step="1"> seconds</span>
+      </label>
+
+      <label>
+        <span>When the time limit is reached</span>
+        <select name="onTimeout">
+          <option value="ask">Ask me</option>
+          <option value="send-without">Send without proof</option>
+          <option value="cancel">Cancel the send</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Bcc recipients</span>
+        <select name="bccMode">
+          <option value="hashed">Bind by hashed address (rid=)</option>
+          <option value="skip">No proof for Bcc recipients</option>
+        </select>
+      </label>
+
+      <label>
+        <span>Worker threads</span>
+        <span class="inline">
+          <input type="number" name="maxWorkers" min="0" max="32" step="1">
+          <small>0 = automatic: min(2, cores − 1)</small>
+        </span>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" name="adaptiveDifficulty">
+        <span>Adaptive difficulty per recipient (currently equivalent to the fixed setting)</span>
+      </label>
+    </fieldset>
+
+    <fieldset>
+      <legend>Incoming</legend>
+
+      <label>
+        <span>Accept proofs up to</span>
+        <span class="inline"><input type="number" name="maxProofAgeDays" min="1" max="365" step="1"> days old</span>
+      </label>
+
+      <label>
+        <span>Minimum accepted difficulty</span>
+        <span class="inline"><input type="number" name="minIncomingBits" min="1" max="30" step="1"> bits</span>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" name="showBadge">
+        <span>Show verification badge on displayed messages</span>
+      </label>
+
+      <label class="check">
+        <input type="checkbox" name="markMissingAsJunk">
+        <span>Mark messages without a valid proof as junk</span>
+      </label>
+      <p class="hint indent">
+        Almost no mail carries a proof today, so this will flag most of your inbox. Leave it off unless you know what
+        you are doing.
+      </p>
+    </fieldset>
+
+    <fieldset>
+      <legend>Diagnostics</legend>
+      <label class="check">
+        <input type="checkbox" name="debugLogging">
+        <span>Debug logging to the error console</span>
+      </label>
+    </fieldset>
+
+    <div class="actions">
+      <button type="button" id="benchmark">Measure my hash rate</button>
+      <button type="button" id="reset">Restore defaults</button>
+      <span id="saved" class="saved"></span>
+    </div>
+    <p class="hint" id="benchmarkResult"></p>
+  </form>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>

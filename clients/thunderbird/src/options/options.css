@@ -1,0 +1,78 @@
+body.options {
+  max-width: 720px;
+  min-width: 0;
+  padding: 20px 24px 32px;
+  line-height: 1.45;
+}
+
+body.options h1 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+fieldset {
+  border: 1px solid var(--esf-border);
+  border-radius: 8px;
+  padding: 12px 16px 16px;
+  margin: 0 0 16px;
+}
+
+legend {
+  padding: 0 6px;
+  font-weight: 600;
+  color: var(--esf-muted);
+}
+
+fieldset label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 6px 0;
+}
+
+fieldset label.check {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+fieldset label > span:first-child {
+  flex: 1 1 auto;
+}
+
+.inline {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  color: var(--esf-muted);
+}
+
+.inline small {
+  font-size: 11px;
+}
+
+select,
+input[type="number"] {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--esf-border);
+  border-radius: 5px;
+  background: var(--esf-bg);
+  color: inherit;
+}
+
+input[type="number"] {
+  width: 72px;
+  text-align: right;
+}
+
+.hint.indent {
+  margin: 0 0 4px 26px;
+  font-size: 12px;
+}
+
+.saved {
+  color: var(--esf-valid);
+  font-size: 12px;
+  align-self: center;
+}
