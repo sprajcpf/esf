@@ -1,13 +1,14 @@
 {
   "name": "esf-outlook",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "ESF — End-Spam-Forever: Proof-of-Work Outlook add-in (Office.js)",
+  "description": "ESF \u2014 End-Spam-Forever: Proof-of-Work Outlook add-in (Office.js)",
   "scripts": {
     "build": "node tools/build.mjs",
     "test": "node --test \"test/**/*.test.mjs\"",
-    "serve": "node tools/serve.mjs"
+    "serve": "node tools/serve.mjs",
+    "package": "node tools/package.mjs"
   },
   "devDependencies": {
     "esbuild": "^0.23.0"
