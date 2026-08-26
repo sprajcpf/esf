@@ -60,7 +60,7 @@ test("parseRawHeaders ignores the body and tolerates LF-only line endings", () =
 
 test("automatic mode is the default, with a three second target", () => {
   assert.equal(DEFAULTS.difficultyMode, "auto", "nobody should have to choose a number of bits");
-  assert.equal(DEFAULTS.autoTargetSeconds, 3);
+  assert.equal(DEFAULTS.autoTargetSeconds, 2);
   assert.equal(normalizeSettings({ difficultyMode: "nonsense" }).difficultyMode, "auto");
   assert.equal(normalizeSettings({ difficultyMode: "fixed" }).difficultyMode, "fixed");
   assert.equal(normalizeSettings({ autoTargetSeconds: 0 }).autoTargetSeconds, 1);

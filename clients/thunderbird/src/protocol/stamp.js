@@ -10,7 +10,7 @@
  * valid iff leading_zero_bits(SHA256(work)) >= d
  */
 
-import { MAX_NONCE_HEX, SALT_BYTES, WORK_PREFIX } from "./constants.js";
+import { MAX_NONCE_HEX, SALT_BYTES, TOKEN_LENGTH, WORK_PREFIX } from "./constants.js";
 import { countLeadingZeroBits, randomHex, sha256, sha256Sync, toBase64Url, toHex } from "./hash.js";
 
 /**
@@ -143,6 +143,29 @@ export function encodeNonce(counter) {
 /** Fresh random salt, 128 bits (whitepaper 6.2 recommendation). */
 export function generateSalt() {
   return randomHex(SALT_BYTES);
+}
+
+/**
+ * A work base with placeholder tokens, for measuring how fast this machine hashes.
+ *
+ * It has to be the same *size* as a real one, not merely the same shape: SHA-256 processes 64 byte blocks, and a real
+ * work input is four blocks where a short improvised one is a single block. Measuring with a short input therefore
+ * overestimates the achievable rate by about 1.8x, which - if that measurement is used to choose a difficulty -
+ * makes every send take roughly 1.8x longer than the user asked for.
+ *
+ * @returns {string}
+ */
+export function probeWorkBase() {
+  return buildWorkBase({
+    algorithm: "sha256",
+    difficulty: 20,
+    timestamp: unixSeconds(),
+    sid: "P".repeat(TOKEN_LENGTH),
+    rid: "R".repeat(TOKEN_LENGTH),
+    mid: "M".repeat(TOKEN_LENGTH),
+    salt: "0".repeat(SALT_BYTES * 2),
+    profileParams: {}
+  });
 }
 
 /**

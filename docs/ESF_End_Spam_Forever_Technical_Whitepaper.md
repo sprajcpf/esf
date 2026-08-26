@@ -634,7 +634,9 @@ probability within a budget t is 1 - e^(-t * rate / 2^d). A single one-second bu
 the time, which is why the reference clients do not treat the budget as a deadline: they compute quietly for a
 second, keep computing visibly afterwards, and only ask the user after a patience threshold. That pairing is what
 makes a d=20 default work in practice - two shards reach it in ~3.5 s on average, four in ~1.7 s - and it is why
-compute budgets, shard counts and baseline difficulty MUST be calibrated together rather than chosen separately. The GPU, ASIC and
+compute budgets, shard counts and baseline difficulty MUST be calibrated together rather than chosen separately. One measurement trap is worth recording, because it silently breaks any implementation that calibrates itself. SHA-256 processes 64-byte blocks, and an ESF work input is about 230 bytes, i.e. four blocks. Measuring the achievable rate with a short improvised input - one block - overstates it by roughly 1.8x on the reference implementation. An implementation that chooses a difficulty from such a measurement therefore aims at a target it cannot hit and every send takes about 1.8x longer than the user was promised. Calibration MUST measure with a work input of realistic length.
+
+The GPU, ASIC and
 Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values
 across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.
 

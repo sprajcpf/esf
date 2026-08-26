@@ -10,7 +10,7 @@
  *   "token"          - include the salted rid, which a determined observer with a guess list can test
  */
 
-import { ALGORITHM_SHA256, HEADER_NAME, PROTOCOL_VERSION, WORK_PREFIX } from "../protocol/constants.js";
+import { ALGORITHM_SHA256, HEADER_NAME, PROTOCOL_VERSION } from "../protocol/constants.js";
 import { resolveOutgoingDifficulty } from "../protocol/policy.js";
 import { serializeStampList } from "../protocol/parser.js";
 import {
@@ -18,6 +18,7 @@ import {
   canonicalMailbox,
   generateSalt,
   messageIdToken,
+  probeWorkBase,
   recipientToken,
   senderToken,
   unixSeconds

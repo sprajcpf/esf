@@ -20,8 +20,14 @@ export const DEFAULTS = Object.freeze({
    * on a slow one. "fixed" is for people who want a specific number and accept the wait that comes with it.
    */
   difficultyMode: "auto",
-  /** What a send should typically cost the user in automatic mode. */
-  autoTargetSeconds: 3,
+  /**
+   * What a send should typically cost the user in automatic mode.
+   *
+   * Two seconds rather than three: this is an *expectation*, and the search is memoryless, so about a quarter of
+   * sends take twice as long as the target and one in seven takes twice that again. Aiming at two keeps the tail
+   * where people do not notice it.
+   */
+  autoTargetSeconds: 2,
   /** Difficulty used when difficultyMode is "fixed"; 0 disables generation. */
   outgoingDifficulty: DEFAULT_DIFFICULTY,
   /**

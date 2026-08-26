@@ -13,6 +13,7 @@ import {
   hashCandidateSync,
   messageIdToken,
   normalizeMessageId,
+  probeWorkBase,
   recipientToken,
   searchNonce,
   senderToken,
@@ -212,4 +213,18 @@ test("generateSalt returns 16 fresh random bytes", () => {
   const first = generateSalt();
   assert.equal(first.length, 32);
   assert.notEqual(first, generateSalt());
+});
+
+test("the measuring probe hashes as much data as a real stamp", () => {
+  // SHA-256 works in 64 byte blocks. A short probe input is one block where a real work input is four, so measuring
+  // with a short one reports a rate the machine cannot deliver - and a difficulty chosen from it makes every send
+  // roughly 1.8x slower than the user asked for. This test is why that cannot come back.
+  // A real stamp carries a 128 bit salt (32 hex characters); the fixture above uses a shorter one, so the
+  // comparison has to be against the real thing rather than against the fixture.
+  const real = buildWorkBase({ ...STAMP, salt: generateSalt() });
+  const probe = probeWorkBase();
+  const blocks = text => Math.ceil((text.length + "nonce=1f2e3d\n".length + 9) / 64);
+  assert.equal(blocks(probe), blocks(real),
+    `probe is ${probe.length} bytes / ${blocks(probe)} blocks, real is ${real.length} / ${blocks(real)}`);
+  assert.ok(Math.abs(probe.length - real.length) <= 8, "and within a few bytes of the same length");
 });

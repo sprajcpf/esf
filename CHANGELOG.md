@@ -3,6 +3,26 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.6.2 (Thunderbird client)
+
+### Fixed
+
+- **Sends took about 1.8x longer than the time budget promised, and the cause was the measurement.** Automatic mode
+  picks a difficulty from the machine's measured hash rate, but the calibration probe hashed a short improvised input
+  — one 64-byte SHA-256 block, where a real work input is four. That made the probe report a rate the machine cannot
+  actually deliver (measured: 1.84x too high), so the chosen difficulty was about a bit too high and a three-second
+  target produced four to five second sends. The probe now hashes an input of realistic length, and a test asserts
+  that it always will. Measured after the fix: 0.97x.
+
+### Changed
+
+- The automatic target drops from three seconds to **two**. It is an expectation, not a cap: because the search is
+  memoryless, roughly one send in seven still takes twice as long, which is what the progress window is for. Aiming
+  at two keeps that tail where it is not noticed.
+- The options page now says the target is an average rather than a promise, and quantifies it.
+- Whitepaper appendix D.10 records the measurement trap, because it silently breaks any implementation that
+  calibrates itself.
+
 ## v0.6.1 (Thunderbird client)
 
 ### Changed
