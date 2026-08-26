@@ -10,7 +10,7 @@
  *   "token"          - include the salted rid, which a determined observer with a guess list can test
  */
 
-import { ALGORITHM_SHA256, HEADER_NAME, PROTOCOL_VERSION } from "../protocol/constants.js";
+import { ALGORITHM_SHA256, HEADER_NAME, PROTOCOL_VERSION, WORK_PREFIX } from "../protocol/constants.js";
 import { resolveOutgoingDifficulty } from "../protocol/policy.js";
 import { serializeStampList } from "../protocol/parser.js";
 import {
@@ -22,6 +22,8 @@ import {
   senderToken,
   unixSeconds
 } from "../protocol/stamp.js";
+import { autoDifficulty, canSendFaster, fasterDifficulty, hashRate } from "../utils/estimate.js";
+import { isStale, loadCalibration, recordMeasurement } from "../utils/calibration.js";
 import { buildFooterPatch } from "../utils/footer.js";
 import { resolveWorkerCount } from "../utils/settings.js";
 import { createLogger } from "../utils/log.js";
@@ -30,6 +32,12 @@ const log = createLogger("compose");
 
 /** How often to keep computing when the user cannot be asked, before giving up on the stamp. */
 const MAX_UNANSWERED_ASKS = 3;
+
+/**
+ * How long to measure the machine when nothing is known about it yet. Long enough to be representative including
+ * worker startup, short enough to be invisible next to the send it precedes.
+ */
+const PROBE_MS = 250;
 
 /** Phases reported to the compose popup. */
 export const ComposePhase = {
@@ -90,6 +98,8 @@ export class ComposeSigner {
     this.controllers = new Map();
     /** @type {Map<number, (decision: string) => void>} */
     this.pendingDecisions = new Map();
+    /** @type {Map<number, string>} tabId -> a decision the user made without being asked */
+    this.steers = new Map();
   }
 
   getState(tabId) {
@@ -103,7 +113,15 @@ export class ComposeSigner {
     return next;
   }
 
-  /** Resolves a pending "this is taking long" question from the compose popup. */
+  /**
+   * Applies a decision from the progress window.
+   *
+   * Two cases. Either the signer is waiting for an answer, in which case this resolves that question; or the user
+   * pressed a button while the search was simply running, in which case the decision is recorded and the current
+   * search is interrupted so it takes effect now rather than whenever the current attempt window happens to end.
+   * The second case is the important one: a button that only works during the last few seconds of a fifteen-second
+   * window is a button that looks broken.
+   */
   resolveDecision(tabId, decision) {
     const resolver = this.pendingDecisions.get(tabId);
     if (resolver) {
@@ -111,7 +129,26 @@ export class ComposeSigner {
       resolver(decision);
       return true;
     }
-    return false;
+    if (!this.controllers.has(tabId)) {
+      return false;
+    }
+    this.steers.set(tabId, decision);
+    this.abort(tabId);
+    return true;
+  }
+
+  /** Takes the decision the user made unprompted, if any. */
+  #takeSteer(tabId) {
+    const steer = this.steers.get(tabId);
+    this.steers.delete(tabId);
+    return steer;
+  }
+
+  /** A fresh abort controller for this tab: an aborted one stays aborted and would end the next search instantly. */
+  #renewController(tabId) {
+    const controller = new AbortController();
+    this.controllers.set(tabId, controller);
+    return controller;
   }
 
   /** Aborts a running computation for a compose tab. */
@@ -167,15 +204,22 @@ export class ComposeSigner {
     const sid = await senderToken(from);
     const mid = await messageIdToken(messageId);
     const workerCount = resolveWorkerCount(settings);
-    const controller = new AbortController();
-    this.controllers.set(tabId, controller);
+    // Automatic mode: pick the difficulty from what this machine measurably does, so the user never chooses a number
+    // and never waits longer than they asked to.
+    const calibrated = settings.difficultyMode === "auto"
+      ? await this.#calibratedDifficulty(settings, workerCount)
+      : null;
+    let controller = this.#renewController(tabId);
+    // Set once the user asks for a faster send, then kept for the remaining recipients of this message.
+    let reducedDifficulty = null;
 
     const stamps = [];
     let hashesTotal = 0;
     const startedAt = Date.now();
     this.#setState(tabId, {
       phase: ComposePhase.COMPUTING,
-      difficulty: settings.outgoingDifficulty,
+      automatic: settings.difficultyMode === "auto",
+      difficulty: calibrated ?? settings.outgoingDifficulty,
       recipientCount: targets.length,
       completed: 0,
       hashes: 0,
@@ -188,52 +232,73 @@ export class ComposeSigner {
     try {
       for (let index = 0; index < targets.length; index++) {
         const target = targets[index];
-        const { difficulty } = resolveOutgoingDifficulty({
+        const { difficulty: resolved } = resolveOutgoingDifficulty({
           recipient: target.mailbox,
           recipientCount: targets.length,
-          settings
+          settings,
+          calibrated
         });
-        if (difficulty <= 0) {
+        if (resolved <= 0) {
           continue;
         }
 
-        const salt = generateSalt();
-        const stamp = {
-          version: PROTOCOL_VERSION,
-          algorithm: ALGORITHM_SHA256,
-          difficulty,
-          timestamp,
-          sid,
-          rid: await recipientToken(target.mailbox, salt),
-          mid,
-          salt,
-          profileParams: {}
-        };
-        const workBase = buildWorkBase(stamp);
         // Two stages, because an enabled ESF is expected to produce a stamp: the search runs silently for the quiet
         // phase, then keeps running while the compose button shows progress, and only asks once patience runs out.
         const quietMs = settings.maxComputeSeconds * 1000;
         const askAfterMs = Math.max(quietMs, settings.askAfterSeconds * 1000);
+        let difficulty = reducedDifficulty ?? resolved;
+        let refusedAsks = 0;
+        let stamp = await this.#buildStamp({ target, difficulty, timestamp, sid, mid });
+        let workBase = buildWorkBase(stamp);
         // Resuming must continue behind the range already searched; restarting at 0 would retry the very same
         // candidates and run out of time again forever.
         let startOffset = 0;
-        let refusedAsks = 0;
-        let outcome = await this.#solveWithBudget({
-          tabId, workBase, difficulty, workerCount, budgetMs: askAfterMs, quietMs, signal: controller.signal,
-          baseHashes: hashesTotal, index, startOffset
-        });
+        let outcome = null;
 
-        while (outcome.timedOut) {
-          startOffset += outcome.hashes;
+        for (;;) {
+          this.#setState(tabId, { difficulty, canSendFaster: canSendFaster(difficulty) });
+          outcome = await this.#solveWithBudget({
+            tabId, workBase, difficulty, workerCount, budgetMs: askAfterMs, quietMs, signal: controller.signal,
+            baseHashes: hashesTotal, index, startOffset
+          });
+          if (outcome.found) {
+            break;
+          }
+
+          // A decision the user made unprompted interrupts the search; otherwise ask, once patience is up.
+          const steer = this.#takeSteer(tabId);
+          if (steer) {
+            controller = this.#renewController(tabId);
+          }
+          const decision = steer || (outcome.timedOut
+            ? await this.#askDecision(tabId, settings, { index, difficulty })
+            : null);
+
           hashesTotal += outcome.hashes;
-          const decision = await this.#askDecision(tabId, settings, { index, difficulty });
-          if (decision === "cancel") {
+
+          if (!decision || decision === "cancel") {
+            // No decision and no timeout means the send itself was cancelled.
             this.#setState(tabId, { phase: ComposePhase.CANCELLED });
             return { cancel: true };
           }
           if (decision === "send-without") {
-            this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "timeout" });
+            this.#setState(tabId, { phase: ComposePhase.SKIPPED, reason: "user-chose-speed" });
             return { details: { customHeaders: keptHeaders } };
+          }
+          if (decision === "faster") {
+            // Lower the difficulty to something this machine finishes quickly, derived from the rate it just
+            // demonstrated, and keep it for the remaining recipients: nobody wants to be asked once per recipient.
+            const rate = hashRate(outcome.hashes, outcome.elapsedMs);
+            const lowered = fasterDifficulty(difficulty, rate);
+            log.info(`faster send requested: ${difficulty} -> ${lowered} bits`);
+            difficulty = lowered;
+            reducedDifficulty = lowered;
+            stamp = await this.#buildStamp({ target, difficulty, timestamp, sid, mid });
+            workBase = buildWorkBase(stamp);
+            // A different difficulty is a different search: the offset from the old one means nothing here.
+            startOffset = 0;
+            this.#setState(tabId, { phase: ComposePhase.COMPUTING, overBudget: true, reason: "faster" });
+            continue;
           }
           if (decision === "unavailable") {
             // The question could not be put to the user. Keep working rather than dropping the stamp silently, but
@@ -245,22 +310,12 @@ export class ComposeSigner {
               return { details: { customHeaders: keptHeaders } };
             }
           }
+          // "continue": keep going where the last attempt window left off.
+          startOffset += outcome.hashes;
           this.#setState(tabId, { phase: ComposePhase.COMPUTING, overBudget: true });
-          outcome = await this.#solveWithBudget({
-            tabId, workBase, difficulty, workerCount, budgetMs: askAfterMs, quietMs, signal: controller.signal,
-            baseHashes: hashesTotal, index, startOffset
-          });
         }
 
         hashesTotal += outcome.hashes;
-        if (outcome.cancelled) {
-          this.#setState(tabId, { phase: ComposePhase.CANCELLED });
-          return { cancel: true };
-        }
-        if (!outcome.found) {
-          log.warn("no nonce found for a recipient");
-          continue;
-        }
         stamps.push({ ...stamp, nonce: outcome.nonce });
         this.#setState(tabId, { completed: index + 1, hashes: hashesTotal });
       }
@@ -273,11 +328,15 @@ export class ComposeSigner {
       this.pendingDecisions.delete(tabId);
     }
 
+    const elapsedMs = Date.now() - startedAt;
+    // Every send is a free measurement of this machine. Recording it is what makes automatic mode adapt: a machine
+    // that got faster does more work next time, one that got slower does less.
+    await recordMeasurement(hashRate(hashesTotal, elapsedMs), workerCount);
     this.#setState(tabId, {
       phase: ComposePhase.DONE,
       completed: stamps.length,
       hashes: hashesTotal,
-      elapsedMs: Date.now() - startedAt
+      elapsedMs
     });
     log.debug(`minted ${stamps.length} stamp(s) in ${Date.now() - startedAt} ms, ${hashesTotal} hashes`);
     if (stamps.length === 0) {
@@ -289,6 +348,73 @@ export class ComposeSigner {
     // done. It is also only ever added once, however often a draft is saved and re-sent.
     const footer = settings.appendFooter ? buildFooterPatch(details) : {};
     return { details: { customHeaders: [...keptHeaders, header], ...footer } };
+  }
+
+  /**
+   * The difficulty to use on this machine in automatic mode.
+   *
+   * Prefers the rate learned from previous sends. With nothing stored - the first send after installation - it runs a
+   * short probe rather than guessing, because guessing low makes the first stamp weak and guessing high makes the
+   * first send the slow one people remember.
+   *
+   * @param {object} settings
+   * @param {number} workerCount
+   * @returns {Promise<number>} difficulty in leading zero bits
+   */
+  async #calibratedDifficulty(settings, workerCount) {
+    const options = { targetSeconds: settings.autoTargetSeconds };
+    const stored = await loadCalibration(workerCount);
+    if (stored.rate > 0 && !isStale(stored)) {
+      return autoDifficulty(stored.rate, options);
+    }
+    const probed = await this.#probeRate(workerCount);
+    if (probed > 0) {
+      await recordMeasurement(probed, workerCount);
+      return autoDifficulty(probed, options);
+    }
+    // Nothing measurable: the floor is the safe answer, and the next send will know better.
+    return autoDifficulty(stored.rate, options);
+  }
+
+  /**
+   * Measures the hash rate with a short unwinnable search, using the real worker pool so the number includes worker
+   * startup rather than flattering the machine.
+   *
+   * @param {number} workerCount
+   * @returns {Promise<number>} hashes per second, 0 when the measurement failed
+   */
+  async #probeRate(workerCount) {
+    const deadline = deadlineSignal(PROBE_MS);
+    try {
+      const result = await this.solver.solve({
+        workBase: `${WORK_PREFIX}\nprobe\n`,
+        difficulty: 64,
+        workerCount,
+        signal: deadline.signal
+      });
+      return hashRate(result.hashes, result.elapsedMs);
+    } catch (error) {
+      log.warn("rate probe failed", error);
+      return 0;
+    } finally {
+      deadline.clear();
+    }
+  }
+
+  /** One stamp skeleton for a recipient: everything except the nonce. */
+  async #buildStamp({ target, difficulty, timestamp, sid, mid }) {
+    const salt = generateSalt();
+    return {
+      version: PROTOCOL_VERSION,
+      algorithm: ALGORITHM_SHA256,
+      difficulty,
+      timestamp,
+      sid,
+      rid: await recipientToken(target.mailbox, salt),
+      mid,
+      salt,
+      profileParams: {}
+    };
   }
 
   /**

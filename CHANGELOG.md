@@ -3,6 +3,39 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.5.0 (Thunderbird client)
+
+The theme of this one: the user should not have to know what a bit is, and should not have to wait.
+
+### Added
+
+- **Automatic difficulty, and it is now the default.** Instead of choosing a number, the user says how long a send
+  may take — three seconds by default — and the add-on picks the strongest stamp that fits *this* machine. It adjusts
+  in both directions: a fast machine does more work, a slow one less. Every send measures itself and folds the result
+  into a stored average, so the estimate follows the hardware without any benchmark, button or telemetry; the number
+  never leaves the profile. The first send after installation measures for a quarter of a second rather than guessing.
+  Professionals can still pin a fixed difficulty and accept the wait that comes with it.
+- **"Send faster" in the progress window** (primary button): lowers the difficulty to something this machine finishes
+  quickly, derived from the rate it just demonstrated, and keeps it for the remaining recipients of that message.
+  Never below 18 bits, because a faster send that buys a stamp receivers refuse is not a favour. The offer is hidden
+  when the difficulty is already at that floor.
+- The progress window says when a difficulty was chosen for this computer, and what it dropped to after a faster
+  send.
+
+### Fixed
+
+- **Every button in the progress window did nothing.** `.actions { display: flex }` overrode the browser's rule for
+  the `hidden` attribute, so the buttons were on screen during the whole computation — including the phase where
+  nothing was waiting for an answer, which is why clicking them had no effect. Visibility now goes through the class
+  that actually hides, and a decision made while the search is merely running interrupts it and takes effect at once
+  instead of whenever the current fifteen-second window happens to end.
+
+### Changed
+
+- "Cancel send" is gone from the progress window; the compose popup still offers it.
+- The window grows when the details are expanded and shrinks again when they are collapsed, instead of putting a
+  scrollbar inside a box too small to read.
+
 ## v0.4.1 (Thunderbird client)
 
 ### Fixed

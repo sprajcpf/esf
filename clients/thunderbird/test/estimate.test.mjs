@@ -9,9 +9,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  autoDifficulty,
+  blendRate,
+  canSendFaster,
   chanceWithin,
   describeProgress,
   expectedSeconds,
+  fasterDifficulty,
   formatRate,
   formatSeconds,
   hashRate
@@ -95,4 +99,63 @@ test("the details explain the wait on their own terms, without analogies", () =>
   assert.match(strings.WORK_EXPLANATION, /costs the recipient almost nothing/);
   assert.match(strings.MEMORYLESS_EXPLANATION, /no progress bar/);
   assert.equal(strings.PRIMARY_LABEL, "Creating proof of work");
+});
+
+test("a faster send picks the highest difficulty that fits the target on this machine", () => {
+  // 300k/s: three seconds buys 900k attempts, so 19 bits (524k expected) fits and 20 does not.
+  assert.equal(fasterDifficulty(22, 300000), 19);
+  assert.equal(fasterDifficulty(26, 300000), 19, "coming down from higher lands in the same place");
+  // A fast machine can keep more of the work.
+  assert.equal(fasterDifficulty(26, 4000000), 23);
+});
+
+test("a faster send never goes below the floor, however slow the machine", () => {
+  assert.equal(fasterDifficulty(22, 1000), 18, "a very slow machine still gets a stamp worth having");
+  assert.equal(fasterDifficulty(22, 0), 18, "no measurement yet: the floor is the fallback");
+  assert.equal(fasterDifficulty(19, 100), 18);
+});
+
+test("a faster send always lowers the difficulty by at least one bit", () => {
+  assert.equal(fasterDifficulty(20, 10_000_000), 19, "never proposes the difficulty already being worked on");
+  assert.ok(fasterDifficulty(24, 300000) < 24);
+});
+
+test("the offer is withheld when it could not help", () => {
+  assert.equal(canSendFaster(20), true);
+  assert.equal(canSendFaster(18), false, "already at the floor: a button that changes nothing is worse than none");
+  assert.equal(canSendFaster(undefined), false);
+});
+
+/* ---------------------------------------------------------------- automatic difficulty */
+
+test("automatic mode picks the most work that fits the time budget", () => {
+  // 300k/s and three seconds buys 900k attempts: 19 bits (524k expected) fits, 20 (1.05M) does not.
+  assert.equal(autoDifficulty(300000, { targetSeconds: 3 }), 19);
+  assert.equal(autoDifficulty(1_200_000, { targetSeconds: 3 }), 21, "a faster machine does more work");
+  assert.equal(autoDifficulty(8_000_000, { targetSeconds: 3 }), 24);
+});
+
+test("a longer budget buys a stronger stamp, a shorter one a weaker", () => {
+  assert.ok(autoDifficulty(300000, { targetSeconds: 10 }) > autoDifficulty(300000, { targetSeconds: 1 }));
+  assert.equal(autoDifficulty(300000, { targetSeconds: 1 }), 18, "one second on a slow machine lands at the floor");
+});
+
+test("automatic mode stays inside bounds that keep the stamp worth having", () => {
+  assert.equal(autoDifficulty(100, { targetSeconds: 3 }), 18, "never below the floor, however slow the machine");
+  assert.equal(autoDifficulty(1e12, { targetSeconds: 3 }), 26, "never above the ceiling, however fast");
+  assert.equal(autoDifficulty(0), 18, "no measurement: the floor");
+  assert.equal(autoDifficulty(NaN), 18);
+});
+
+test("the machine estimate moves towards new measurements without lurching", () => {
+  assert.equal(blendRate(0, 300000), 300000, "the first measurement is taken as it is");
+  const slower = blendRate(300000, 100000);
+  assert.ok(slower < 300000 && slower > 100000, "one bad sample moves the estimate without owning it");
+  // Repeated agreement converges.
+  let rate = 300000;
+  for (let i = 0; i < 20; i++) {
+    rate = blendRate(rate, 100000);
+  }
+  assert.ok(Math.abs(rate - 100000) < 5000, "a real change is learned");
+  assert.equal(blendRate(300000, 0), 300000, "an unusable sample is ignored, not treated as zero");
 });

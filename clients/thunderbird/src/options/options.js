@@ -51,8 +51,16 @@ async function persist() {
 }
 
 form.addEventListener("change", () => {
+  reflectMode();
   persist().catch(error => console.error("[ESF:options]", error));
 });
+
+/** The fixed difficulty and the time budget are mutually irrelevant; grey out whichever does not apply. */
+function reflectMode() {
+  const automatic = form.elements.difficultyMode.value === "auto";
+  form.elements.outgoingDifficulty.disabled = automatic;
+  form.elements.autoTargetSeconds.disabled = !automatic;
+}
 
 document.getElementById("reset").addEventListener("click", async () => {
   const settings = await saveSettings(DEFAULTS);
@@ -109,4 +117,7 @@ function formatSeconds(seconds) {
 
 document.getElementById("footerPreview").textContent = footerPreview();
 
-loadSettings().then(applyToForm);
+loadSettings().then(settings => {
+  applyToForm(settings);
+  reflectMode();
+});

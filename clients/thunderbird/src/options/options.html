@@ -31,16 +31,39 @@
       </label>
 
       <label>
-        <span>Baseline difficulty</span>
+        <span>How much work to do</span>
+        <select name="difficultyMode">
+          <option value="auto">Automatic — as much as fits the time below (recommended)</option>
+          <option value="fixed">A fixed amount that I choose</option>
+        </select>
+      </label>
+      <p class="hint indent">
+        Automatic measures what this computer manages and picks the strongest stamp that still fits your time budget,
+        adjusting as the machine gets faster or slower. You never have to think about bits; the mail simply gets
+        stamped. Because the search is a matter of luck, a send can still run long — that is what the progress window
+        is for, and it appears in automatic mode too.
+      </p>
+
+      <label>
+        <span>A send should usually take under</span>
+        <span class="inline"><input type="number" name="autoTargetSeconds" min="1" max="60" step="1"> seconds</span>
+      </label>
+
+      <label>
+        <span>Fixed difficulty</span>
         <select name="outgoingDifficulty">
           <option value="0">Disabled</option>
           <option value="18">18 bits</option>
-          <option value="20">20 bits (default)</option>
+          <option value="20">20 bits</option>
           <option value="22">22 bits</option>
           <option value="24">24 bits</option>
           <option value="26">26 bits</option>
         </select>
       </label>
+      <p class="hint indent">
+        Only used when the mode above is set to a fixed amount. Higher is more expensive for a bulk sender and slower
+        for you: each extra bit doubles the work.
+      </p>
 
       <label>
         <span>Compute quietly for</span>

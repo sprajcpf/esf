@@ -63,8 +63,8 @@ async function openProgressWindow(tabId) {
     const created = await browser.windows.create({
       url: `/src/progress/progress.html?tabId=${tabId}`,
       type: "popup",
-      width: 420,
-      height: 260,
+      width: 430,
+      height: 200,
       allowScriptsToClose: true
     });
     progressWindows.set(tabId, created.id);

@@ -50,10 +50,15 @@ export function classifyRecipient(_input) {
  * @param {string} params.recipient
  * @param {number} params.recipientCount
  * @param {object} params.settings
+ * @param {number} [params.calibrated] difficulty chosen for this machine in automatic mode
  * @returns {{difficulty: number, peerClass: string}}
  */
-export function resolveOutgoingDifficulty({ recipient, recipientCount, settings }) {
-  const baseline = Number(settings.outgoingDifficulty) || 0;
+export function resolveOutgoingDifficulty({ recipient, recipientCount, settings, calibrated }) {
+  // In automatic mode the baseline is whatever this machine can do inside the user's time budget; the caller
+  // measures that and passes it in, because the protocol layer knows nothing about the local machine.
+  const baseline = settings.difficultyMode === "auto" && Number.isInteger(calibrated)
+    ? calibrated
+    : Number(settings.outgoingDifficulty) || 0;
   if (baseline <= 0) {
     return { difficulty: 0, peerClass: PeerClass.UNKNOWN };
   }

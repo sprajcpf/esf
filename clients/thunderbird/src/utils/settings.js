@@ -12,7 +12,17 @@ const STORAGE_KEY = "settings";
 export const DEFAULTS = Object.freeze({
   /** Master switch for outgoing stamp generation. Verification of incoming mail stays active. */
   enabled: true,
-  /** Baseline outgoing difficulty in leading zero bits; 0 disables generation. */
+  /**
+   * How the outgoing difficulty is chosen.
+   *
+   * "auto" is the default and the point of the whole setting: the user says how long a send may take, and the
+   * difficulty follows from what this machine measurably manages, adjusting upwards on a fast machine and downwards
+   * on a slow one. "fixed" is for people who want a specific number and accept the wait that comes with it.
+   */
+  difficultyMode: "auto",
+  /** What a send should typically cost the user in automatic mode. */
+  autoTargetSeconds: 3,
+  /** Difficulty used when difficultyMode is "fixed"; 0 disables generation. */
   outgoingDifficulty: DEFAULT_DIFFICULTY,
   /**
    * Quiet phase per recipient, in seconds. Most sends finish inside it and nothing is shown at all. When it passes,
@@ -94,6 +104,8 @@ export function normalizeSettings(raw) {
     ...DEFAULTS,
     ...input,
     enabled: input.enabled !== false,
+    difficultyMode: input.difficultyMode === "fixed" ? "fixed" : "auto",
+    autoTargetSeconds: clamp(Number(input.autoTargetSeconds), 1, 60, DEFAULTS.autoTargetSeconds),
     outgoingDifficulty: SELECTABLE_DIFFICULTY.includes(outgoingDifficulty)
       ? outgoingDifficulty
       : DEFAULTS.outgoingDifficulty,

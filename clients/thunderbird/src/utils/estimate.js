@@ -122,3 +122,89 @@ export function describeProgress(state, now = Date.now()) {
     unusual: Number.isFinite(expected) && elapsedSeconds > 2 * expected
   };
 }
+
+/**
+ * The difficulty to drop to when the user asks for a faster send.
+ *
+ * Derived from the *measured* rate rather than guessed, so the promise the button makes ("under a few seconds") holds
+ * on the machine it was pressed on: 2^d / rate < targetSeconds. Two guard rails:
+ *
+ *  - never below `floor`. 18 bits is the point where the work is still worth something and still above what a
+ *    receiver is likely to require for a green result; going lower would trade a wait for a worthless stamp.
+ *  - always at least one bit below the current difficulty, because a button that changes nothing is worse than no
+ *    button. When the current difficulty already is the floor, there is nothing to offer - see `canSendFaster`.
+ *
+ * @param {number} current difficulty being worked on
+ * @param {number} rate measured hashes per second, 0 when unknown
+ * @param {{targetSeconds?: number, floor?: number}} [options]
+ * @returns {number} the difficulty to use instead
+ */
+export function fasterDifficulty(current, rate, { targetSeconds = 3, floor = 18 } = {}) {
+  const ceiling = Number.isInteger(current) ? current - 1 : floor;
+  if (!Number.isFinite(rate) || rate <= 0) {
+    // No measurement to reason from: fall back to the floor, which is the "im Notfall" case.
+    return Math.max(floor, Math.min(ceiling, floor));
+  }
+  const affordable = Math.floor(Math.log2(targetSeconds * rate));
+  return Math.max(floor, Math.min(ceiling, affordable));
+}
+
+/**
+ * Whether offering a faster send is honest: only when it would actually lower the difficulty.
+ *
+ * @param {number} current
+ * @param {number} [floor]
+ */
+export function canSendFaster(current, floor = 18) {
+  return Number.isInteger(current) && current > floor;
+}
+
+/**
+ * The difficulty to use in automatic mode: the most work this machine can do inside the target time.
+ *
+ * The point of automatic mode is that nobody has to know what a bit is. The user states how long a send may take -
+ * three seconds by default - and the difficulty follows from what the machine actually manages. A fast machine
+ * therefore does *more* work than a slow one, which is the right way round: the whole mechanism is about cost, and a
+ * machine that can afford more should pay more.
+ *
+ * Bounds, both deliberate:
+ *  - `floor` (18): below this a stamp starts being refused as too weak by receivers, so a faster send would buy a
+ *    worthless stamp. Better to exceed the target slightly than to send something nobody counts.
+ *  - `ceiling` (26): past this the extra work buys nothing a receiver asks for today, and the tail of unlucky sends
+ *    gets long enough to be annoying.
+ *
+ * The result is an *expectation*, not a guarantee: the search is memoryless, so individual sends still vary widely.
+ * That is exactly why the progress window continues to exist in automatic mode.
+ *
+ * @param {number} rate measured hashes per second
+ * @param {{targetSeconds?: number, floor?: number, ceiling?: number}} [options]
+ * @returns {number} difficulty in leading zero bits
+ */
+export function autoDifficulty(rate, { targetSeconds = 3, floor = 18, ceiling = 26 } = {}) {
+  if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(targetSeconds) || targetSeconds <= 0) {
+    return floor;
+  }
+  const affordable = Math.floor(Math.log2(targetSeconds * rate));
+  return Math.max(floor, Math.min(ceiling, affordable));
+}
+
+/**
+ * Folds a new rate measurement into the stored one.
+ *
+ * A single send is a poor measurement: the machine may have been busy, thermally throttled, or the sample may be
+ * short. An exponential moving average keeps the estimate responsive to a real change - a different machine, a
+ * different power profile - without letting one unlucky send halve the difficulty for everybody.
+ *
+ * @param {number} previous stored rate, 0 when there is none
+ * @param {number} sample newly measured rate
+ * @param {number} [weight] how much the new sample counts
+ */
+export function blendRate(previous, sample, weight = 0.3) {
+  if (!Number.isFinite(sample) || sample <= 0) {
+    return Number.isFinite(previous) && previous > 0 ? previous : 0;
+  }
+  if (!Number.isFinite(previous) || previous <= 0) {
+    return sample;
+  }
+  return previous * (1 - weight) + sample * weight;
+}

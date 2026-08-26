@@ -58,19 +58,41 @@ test("parseRawHeaders ignores the body and tolerates LF-only line endings", () =
   assert.deepEqual(values, ["v=1"]);
 });
 
+test("automatic mode is the default, with a three second target", () => {
+  assert.equal(DEFAULTS.difficultyMode, "auto", "nobody should have to choose a number of bits");
+  assert.equal(DEFAULTS.autoTargetSeconds, 3);
+  assert.equal(normalizeSettings({ difficultyMode: "nonsense" }).difficultyMode, "auto");
+  assert.equal(normalizeSettings({ difficultyMode: "fixed" }).difficultyMode, "fixed");
+  assert.equal(normalizeSettings({ autoTargetSeconds: 0 }).autoTargetSeconds, 1);
+  assert.equal(normalizeSettings({ autoTargetSeconds: 999 }).autoTargetSeconds, 60);
+});
+
+test("in automatic mode the calibrated difficulty wins over the fixed setting", () => {
+  const settings = normalizeSettings({ difficultyMode: "auto", outgoingDifficulty: 26 });
+  const resolved = resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings, calibrated: 19 });
+  assert.equal(resolved.difficulty, 19);
+});
+
+test("in fixed mode the calibration is ignored, because the user asked for a number", () => {
+  const settings = normalizeSettings({ difficultyMode: "fixed", outgoingDifficulty: 24 });
+  const resolved = resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings, calibrated: 19 });
+  assert.equal(resolved.difficulty, 24);
+});
+
 test("the static policy charges every unknown peer the configured baseline", () => {
-  const settings = normalizeSettings({ outgoingDifficulty: 24 });
+  const settings = normalizeSettings({ difficultyMode: "fixed", outgoingDifficulty: 24 });
   assert.deepEqual(resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings }),
     { difficulty: 24, peerClass: PeerClass.UNKNOWN });
 });
 
 test("difficulty 0 disables generation", () => {
-  const settings = normalizeSettings({ outgoingDifficulty: 0 });
+  const settings = normalizeSettings({ difficultyMode: "fixed", outgoingDifficulty: 0 });
   assert.equal(resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings }).difficulty, 0);
 });
 
 test("the trust-aware policy applies the per-class rule", () => {
-  const settings = normalizeSettings({ outgoingDifficulty: 22, trustAwareDifficulty: true });
+  const settings = normalizeSettings({ difficultyMode: "fixed", outgoingDifficulty: 22,
+    trustAwareDifficulty: true });
   assert.equal(resolveOutgoingDifficulty({ recipient: "a@b.cc", recipientCount: 1, settings }).difficulty, 22,
     "unknown peers get the baseline");
 });

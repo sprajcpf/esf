@@ -1,6 +1,6 @@
 {
   "name": "esf-thunderbird",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "private": true,
   "type": "module",
   "description": "ESF \u2014 End-Spam-Forever: Proof-of-Work MailExtension for Thunderbird",
