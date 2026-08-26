@@ -110,8 +110,9 @@ The theme of this one: the user should not have to know what a bit is, and shoul
 
 ## v0.4.0 (Thunderbird client)
 
-Thunderbird only; the Outlook client stays at 0.3.0 because nothing in it changed. From here the clients are
-versioned independently rather than bumped in lockstep for changes they do not share.
+Thunderbird only; the Outlook client stayed at 0.3.0 because nothing in it changed yet. The numbers diverge only
+while the feature sets do — see the versioning rule in CONTRIBUTING.md — and are brought back together as soon as the
+clients do the same thing again.
 
 ### Added
 

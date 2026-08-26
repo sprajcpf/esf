@@ -124,6 +124,22 @@ For everything else: tests, and a clear description of the behaviour before and 
 - Both suites must pass. There is no CI yet (roadmap Stage 1), so run them yourself and say so in the pull request.
 - Do not weaken a test to make a change pass. If a test is wrong, fix the test in its own commit and explain why.
 
+## Versioning
+
+**Clients that do the same thing carry the same version number.** When a release brings the clients to the same
+feature set, they are numbered alike and the repository tag matches — a user comparing Thunderbird 0.7.0 with Outlook
+0.7.0 should be able to assume they behave the same.
+
+Numbers only diverge while the feature sets genuinely do, which happens when a change lands in one client first. The
+divergence is temporary and gets closed by the next release, not carried forward.
+
+Platform limits are not a reason to diverge. Some things Office.js cannot do at all — an event handler cannot open a
+dialog of its own, for instance — and the version stays aligned anyway, with the gap documented in that client's
+README rather than encoded in a version number nobody can interpret.
+
+The protocol version (`v=1` inside a stamp) is independent of all of this. It moves only when a change would stop
+existing stamps from verifying.
+
 ## Documentation
 
 - `docs/*.md` is the source. `*.html`, `*.odt` and `*.docx` are generated — never edit them by hand; run
