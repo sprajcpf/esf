@@ -6,6 +6,8 @@
  */
 
 import { Signal, StampState } from "../protocol/constants.js";
+import { SUGGESTION } from "../ui/strings.js";
+import { PROJECT_URL } from "../utils/footer.js";
 import { ComposePhase, ComposeSigner } from "./composeSigner.js";
 import { PowSolver } from "./solver.js";
 import { VerificationService } from "./verificationService.js";
@@ -236,6 +238,9 @@ browser.runtime.onMessage.addListener((message, _sender) => {
     case "esf:getVerification":
       return getVerificationForTab(message.tabId, message.force === true);
 
+    case "esf:suggestEsf":
+      return suggestEsfToSender(message.tabId, message.state);
+
     default:
       return undefined;
   }
@@ -248,7 +253,39 @@ async function getVerificationForTab(tabId, force) {
     return { state: null };
   }
   const result = await verificationService.verifyMessage(message, { force });
-  return { ...result, subject: message.subject, author: message.author, settings: await getSettings() };
+  return {
+    ...result,
+    subject: message.subject,
+    author: message.author,
+    sender: await verificationService.senderContext(message),
+    settings: await getSettings()
+  };
+}
+
+/**
+ * Opens a reply suggesting ESF to the sender - as a draft, never sent.
+ *
+ * The add-on has no business sending mail on the user's behalf, and a one-click "tell them off" button pointed at
+ * unstamped mail would be a nuisance generator: today almost every message is unstamped. So this prepares a message
+ * the user reads, edits and sends themselves, and it is only offered where there is plausibly a person to reach.
+ */
+async function suggestEsfToSender(tabId, state) {
+  const displayed = await browser.messageDisplay.getDisplayedMessages(tabId);
+  const message = (displayed.messages || [])[0];
+  if (!message) {
+    return { ok: false, reason: "no-message" };
+  }
+  const template = state === StampState.INVALID ? SUGGESTION.invalid : SUGGESTION.missing;
+  try {
+    await browser.compose.beginReply(message.id, "replyToSender", {
+      isPlainText: true,
+      plainTextBody: template.body(PROJECT_URL)
+    });
+    return { ok: true };
+  } catch (error) {
+    log.warn("cannot open the suggestion draft", error);
+    return { ok: false, reason: String(error && error.message ? error.message : error) };
+  }
 }
 
 getSettings().then(settings => log.info(`ESF ready (outgoing difficulty ${settings.outgoingDifficulty})`));

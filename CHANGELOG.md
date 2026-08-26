@@ -3,6 +3,31 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.6.0 (Thunderbird client)
+
+### Added
+
+- **A button to tell the sender about ESF**, on messages without an accepted stamp — the first and primary action in
+  the panel. It opens a **reply as a draft**: the user reads it, edits it if they want, and sends it. The add-on never
+  sends mail on anyone's behalf, and it never sends anything in bulk.
+- Two guard rails, because this button points at unstamped mail and nearly all mail is unstamped:
+  - It is **withheld** for mailing lists (`List-Id`, `List-Post`, `Precedence: bulk`), automated senders
+    (`Auto-Submitted` other than `no`, auto-response headers) and no-reply addresses, with the reason shown instead —
+    there is nobody at the other end to ask.
+  - Where it is offered, the note underneath says the part an interface must not hide: **a reply proves to a stranger
+    that the address is real.** Fine for correspondence, exactly wrong for spam — and a missing stamp looks identical
+    in both cases.
+- A message whose stamp was present but *failed* gets a different, more useful draft: that is a bug report between two
+  ESF users, not a suggestion.
+- The suggestion text is written to be sendable unedited: it opens by saying the mail arrived fine, accuses nobody,
+  explains the mechanism in one sentence and asks for nothing. A test rejects demanding words like "must",
+  "required" or "blocked".
+
+### Changed
+
+- The wording for a message without a stamp no longer says "almost no mail does today"; it just states that this is
+  not a sign of spam.
+
 ## v0.5.0 (Thunderbird client)
 
 The theme of this one: the user should not have to know what a bit is, and should not have to wait.

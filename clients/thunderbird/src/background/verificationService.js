@@ -14,6 +14,7 @@ import {
 import { receiverPolicy } from "../protocol/policy.js";
 import { stampId, verifyMessageStamps } from "../protocol/verifier.js";
 import { canonicalMailbox } from "../protocol/stamp.js";
+import { classifySender } from "../utils/sender.js";
 import { createLogger } from "../utils/log.js";
 
 const log = createLogger("verify");
@@ -116,6 +117,25 @@ export class VerificationService {
     this.#cacheResult(message.id, result);
     log.debug("verified", message.id, result.state, result.reason);
     return result;
+  }
+
+  /**
+   * Whether it is worth offering to tell this sender about ESF, and why not when it is not.
+   *
+   * @param {{id: number, author?: string}} message
+   */
+  async senderContext(message) {
+    let headers = {};
+    try {
+      if (typeof browser.messages.getHeaders === "function") {
+        headers = await browser.messages.getHeaders(message.id);
+      } else {
+        headers = (await browser.messages.getFull(message.id, { decodeHeaders: true })).headers || {};
+      }
+    } catch (error) {
+      log.warn("cannot read headers for the sender assessment", error);
+    }
+    return { author: message.author || "", ...classifySender({ headers, author: message.author }) };
   }
 
   /**

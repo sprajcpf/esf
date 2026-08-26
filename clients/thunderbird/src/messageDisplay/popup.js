@@ -10,6 +10,9 @@ const statusText = document.getElementById("statusText");
 const hintEl = document.getElementById("hint");
 const detailsEl = document.getElementById("details");
 const disclosure = document.getElementById("disclosure");
+const suggestButton = document.getElementById("suggest");
+const suggestNote = document.getElementById("suggestNote");
+let current = null;
 
 import { MINIMUM_FEEDBACK_MS, atLeast } from "../utils/timing.js";
 
@@ -23,7 +26,7 @@ const STATE_TEXT = {
   strong: "This sender spent measurable computing time for your address.",
   weak: "A valid proof is present, but below what you ask for.",
   unsupported: "The proof uses a work profile this add-on does not implement.",
-  missing: "This message carries no ESF stamp. Almost no mail does today — this is not a sign of spam.",
+  missing: "This message carries no ESF stamp, which is not a sign of spam.",
   invalid: "A stamp is present but was not accepted."
 };
 
@@ -55,6 +58,7 @@ function row(term, value) {
 }
 
 function render(result) {
+  current = result;
   const signal = result.signal || "red";
   statusEl.className = `status ${signal}`;
   const best = result.best;
@@ -91,6 +95,7 @@ function render(result) {
   if (best && best.detail) {
     row("Detail", String(best.detail));
   }
+  renderSuggestion(result);
   row("Stamps examined", `${result.stampCount ?? 0} in ${result.headerCount ?? 0} header field(s)`);
   if (result.skipped > 0) {
     row("Ignored", `${result.skipped} beyond the parser limits`);
@@ -106,6 +111,47 @@ async function currentTabId() {
   const tabs = await browser.tabs.query({ active: true, currentWindow: true });
   return tabs.length > 0 ? tabs[0].id : null;
 }
+
+/**
+ * Offers to tell the sender about ESF, but only where that makes sense.
+ *
+ * Withheld for mailing lists, automated senders and no-reply addresses, because there is nobody at the other end to
+ * ask. Where it is offered, the note underneath says the thing the interface must not hide: replying proves to an
+ * unknown sender that the address is real, which is fine for correspondence and exactly wrong for spam - and a
+ * missing stamp looks identical in both cases.
+ */
+function renderSuggestion(result) {
+  const red = (result.signal || "red") === "red";
+  const sender = result.sender || {};
+  const offer = red && sender.replyable === true;
+  suggestButton.classList.toggle("hidden", !offer);
+  suggestButton.disabled = false;
+  suggestButton.textContent = result.state === "invalid" ? "Tell sender it failed" : "Tell sender about ESF";
+  const note = offer
+    ? "Opens a reply you can read and edit; nothing is sent for you. Only worth it for senders you know — a reply " +
+      "tells a stranger the address is real."
+    : red && sender.reason
+      ? sender.reason
+      : "";
+  suggestNote.textContent = note;
+  suggestNote.classList.toggle("hidden", note === "");
+}
+
+document.getElementById("suggest").addEventListener("click", async () => {
+  suggestButton.disabled = true;
+  const response = await browser.runtime.sendMessage({
+    type: "esf:suggestEsf",
+    tabId: (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.id,
+    state: current && current.state
+  });
+  if (response && response.ok) {
+    window.close();
+    return;
+  }
+  suggestNote.textContent = `Could not open a reply: ${response && response.reason ? response.reason : "unknown"}`;
+  suggestNote.classList.remove("hidden");
+  suggestButton.disabled = false;
+});
 
 async function load() {
   render(await verify(await currentTabId(), false));
