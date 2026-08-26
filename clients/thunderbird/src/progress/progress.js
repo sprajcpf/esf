@@ -7,7 +7,7 @@
  */
 
 import { describeProgress, formatRate } from "../utils/estimate.js";
-import { HEADLINES, MEMORYLESS_EXPLANATION, MINING_EXPLANATION } from "../ui/strings.js";
+import { HEADLINES, MEMORYLESS_EXPLANATION, WORK_EXPLANATION } from "../ui/strings.js";
 
 const headlineEl = document.getElementById("headline");
 const summaryEl = document.getElementById("summary");
@@ -17,7 +17,7 @@ const actionsEl = document.getElementById("actions");
 const detailsEl = document.getElementById("details");
 const disclosure = document.getElementById("disclosure");
 
-document.getElementById("mining").textContent = MINING_EXPLANATION;
+document.getElementById("explanation").textContent = WORK_EXPLANATION;
 document.getElementById("memoryless").textContent = MEMORYLESS_EXPLANATION;
 
 const composeTabId = Number(new URLSearchParams(window.location.search).get("tabId"));

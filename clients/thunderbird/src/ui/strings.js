@@ -1,39 +1,34 @@
 /**
  * User-facing wording for the send-time progress surface, in one place.
  *
- * Why one place: the label for what the add-on is doing while it computes is a positioning decision, not a string.
- * "Mining" is the most recognisable word available and technically exact - it is the same SHA-256 nonce search as
- * cryptocurrency mining. It also carries baggage the project cannot afford in a primary surface: cryptojacking
- * trained users and IT departments that "this program is mining" means "this program is compromised", it implies the
- * user or the vendor earns something (nothing is earned; the cost is the entire point), and the whitepaper itself
- * distances ESF from mining rewards and consensus in section 2.1.
+ * One decision is recorded here rather than in a commit message, because it will come up again: the word "mining" is
+ * deliberately absent from every string in this file.
  *
- * The compromise implemented here: plain language in the headline, the word "mining" where a curious user goes
- * looking, with the comparison made explicitly and the difference stated. Switching to "mining" as the primary label
- * is a one-line change - set PRIMARY_LABEL to MINING_LABEL.
+ * It would be the most recognisable word available, and technically exact - the search really is the same SHA-256
+ * nonce hunt as cryptocurrency mining. It is left out anyway. Cryptojacking taught users and IT departments that a
+ * program which "mines" is a program that has been compromised, which is a poor first impression for a mail add-on
+ * that wants to be deployed by administrators. It also implies an earning: miners are paid, while here the cost is
+ * the entire product and nobody is paid at all. And the whitepaper distances ESF from mining rewards and consensus
+ * in section 2.1, so putting the word in the primary surface would contradict the project's own framing.
+ *
+ * The wait is therefore explained by what it actually is - a search - which needs no borrowed vocabulary.
  */
 
-/** Plain-language label. Says what happens without inviting the crypto reading. */
-export const STAMPING_LABEL = "Creating proof of work";
+/** What the add-on is doing, in words that need no background. */
+export const PRIMARY_LABEL = "Creating proof of work";
 
-/** The recognisable alternative, kept next to it so the choice stays visible and reversible. */
-export const MINING_LABEL = "Mining stamp";
-
-/** The label actually used in the headline. */
-export const PRIMARY_LABEL = STAMPING_LABEL;
-
-/** The comparison, for the details view: it explains the wait by reference to something people know. */
-export const MINING_EXPLANATION =
-  "This is the same computation as cryptocurrency mining - searching for a number whose hash starts with enough " +
-  "zero bits - which is why it takes a moment and warms your CPU. The difference: nothing is earned, nothing is " +
-  "transmitted, and no network is involved. The cost is the entire point, because it is what makes sending a " +
-  "million of these expensive.";
+/** What the computer is actually doing, for the details view. No analogies required. */
+export const WORK_EXPLANATION =
+  "Your computer is trying numbers until one of them produces a fingerprint that begins with enough zeroes. There " +
+  "is no shortcut, which is the point: finding one costs a measurable amount of computing time, while checking it " +
+  "costs the recipient almost nothing. That difference is what makes sending a million of these expensive and " +
+  "sending this one cheap.";
 
 /** Why there is no percentage. Shown in the details view, because it is the obvious question. */
 export const MEMORYLESS_EXPLANATION =
   "There is no progress bar because there is no progress to report: every attempt has the same chance of " +
-  "succeeding, so work already done does not bring the result closer. What is shown is how long this usually takes " +
-  "on this machine.";
+  "succeeding, so work already done does not bring the result closer. What is shown instead is how long this " +
+  "usually takes on this machine.";
 
 export const HEADLINES = {
   computing: PRIMARY_LABEL,

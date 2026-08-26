@@ -3,6 +3,36 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.4.0 (Thunderbird client)
+
+Thunderbird only; the Outlook client stays at 0.3.0 because nothing in it changed. From here the clients are
+versioned independently rather than bumped in lockstep for changes they do not share.
+
+### Added
+
+- **A progress window for sends that run past the quiet phase.** It says roughly how long this usually takes on this
+  machine, shows the time spent, and closes itself. Once patience runs out the same window carries the three buttons
+  — keep going, send without, cancel — so there is one surface instead of two. It replaces
+  `composeAction.openPopup()` for that question, which needs the compose window to cooperate and silently does
+  nothing in some situations. Switchable off in the options.
+- A details disclosure with difficulty, measured speed, attempts, worker threads and recipient progress.
+
+### Deliberately absent
+
+- **No percentage and no filling progress bar.** The nonce search is memoryless: attempts already made do not bring
+  the result closer, so a bar would promise a completion nobody can predict. Shown instead is the typical duration at
+  the measured local rate, and past twice that duration the window says the send is unlucky rather than stuck.
+- **No mention of mining or cryptocurrency anywhere in the user-facing wording**, enforced by a test. The word would
+  be recognisable and technically exact, but cryptojacking taught users and administrators that a program which
+  "mines" is a compromised program, it implies an earning where the cost is the entire product, and the whitepaper
+  distances ESF from mining rewards in section 2.1. The wait is explained as what it is — a search with no shortcut.
+  The reasoning is recorded in `src/ui/strings.js`.
+
+### Fixed
+
+- `describeProgress` treated a `startedAt` of 0 as missing through a truthiness check, reporting every wait as zero
+  seconds long. Found by the test written for it.
+
 ## v0.3.0
 
 ### Added

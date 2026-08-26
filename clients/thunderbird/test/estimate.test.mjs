@@ -16,7 +16,7 @@ import {
   formatSeconds,
   hashRate
 } from "../src/utils/estimate.js";
-import { MEMORYLESS_EXPLANATION, MINING_EXPLANATION, PRIMARY_LABEL } from "../src/ui/strings.js";
+import * as strings from "../src/ui/strings.js";
 
 test("hashRate measures what happened, and refuses to invent a number", () => {
   assert.equal(hashRate(300000, 1000), 300000);
@@ -79,10 +79,20 @@ test("the recipient counter counts the one being worked on, not the finished one
   assert.equal(last.recipients, "recipient 3 of 3", "never counts past the total");
 });
 
-test("the headline avoids the crypto reading, and the details supply the comparison", () => {
-  assert.ok(!PRIMARY_LABEL.toLowerCase().includes("mining"),
-    "the primary label stays plain; see src/ui/strings.js for why");
-  assert.match(MINING_EXPLANATION, /cryptocurrency mining/);
-  assert.match(MINING_EXPLANATION, /nothing is earned/);
-  assert.match(MEMORYLESS_EXPLANATION, /no progress bar/);
+test("no user-facing string mentions mining or cryptocurrency", () => {
+  // A product decision worth a test: see the note at the top of src/ui/strings.js.
+  const shown = Object.values(strings)
+    .flatMap(value => (typeof value === "string" ? [value] : Object.values(value)))
+    .join(" ")
+    .toLowerCase();
+  for (const word of ["mining", "miner", "mine ", "crypto", "bitcoin", "blockchain", "coin"]) {
+    assert.ok(!shown.includes(word), `user-facing wording must not contain "${word.trim()}"`);
+  }
+});
+
+test("the details explain the wait on their own terms, without analogies", () => {
+  assert.match(strings.WORK_EXPLANATION, /no shortcut/);
+  assert.match(strings.WORK_EXPLANATION, /costs the recipient almost nothing/);
+  assert.match(strings.MEMORYLESS_EXPLANATION, /no progress bar/);
+  assert.equal(strings.PRIMARY_LABEL, "Creating proof of work");
 });
