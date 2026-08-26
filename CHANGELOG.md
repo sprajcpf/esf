@@ -3,6 +3,51 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## Unreleased
+
+Documentation only; no client change, so no version moves.
+
+### Added
+
+- **`docs/prior-art.md`** — the long-form history of computational postage for email, and the published criticism of
+  it. Dwork and Naor 1992, Hashcash, Camram, Microsoft Research's Penny Black, the SpamAssassin Hashcash plugin,
+  PennyPost, the hashcash CLI and milter; then Bitcoin as the large-scale demonstration and Softwar as the reframing.
+  Rendered to HTML, ODT and DOCX like the other documents, and checked against the Markdown.
+- **Whitepaper section 2 grew from three citations to thirteen subsections**, including the comparison of what ESF
+  actually adds, the Laurie and Clayton objection at full strength before any answer, botnets and stolen computation,
+  legitimate bulk mail, and why the earlier systems did not become mainstream. References grew from 16 to 46.
+- A `## Prior art` section in the README, so the honest framing is on the front page rather than only in the
+  whitepaper.
+
+### Changed
+
+- **The positioning is now canonical and consistent across the Abstract, section 1, section 17, the README and the
+  roadmap.** ESF does not claim to have invented computational postage for email; it is a modern, interoperable,
+  receiver-policy-driven implementation of a thirty-year-old idea, aimed at the deployment, interoperability,
+  usability and algorithm-agility problems that kept the earlier systems from broad adoption.
+- **Corrected an inaccuracy the whitepaper had carried since the first draft.** It read that Dwork and Naor proposed
+  the idea and that Adam Back "later developed Hashcash", which implies descent. Back states in his 2002 report that
+  he was unaware of the Dwork and Naor work, and the 1992 paper contains no hash proof-of-work at all — its
+  constructions are number-theoretic. It was independent rediscovery, and it now says so.
+- **The roadmap's collateral-damage figure was wrong.** It gave "1-13 %" for the Laurie and Clayton finding, which
+  conflates two different series. The correct figures are 0.6-1.6 % of senders unable to send their daily volume and
+  5-13 % unable to sustain their peak hourly volume, and the version and limit now travel with every number, because
+  the two versions of the paper pair them differently.
+- The roadmap no longer claims that a memory-hard profile narrows the attacker gap "by orders of magnitude". The
+  measured spread is a factor of four, and Laurie and Clayton already fold that factor into their own headroom — so
+  invoking it against them repeats their argument. It narrows the gap; it does not close it.
+- Reference [1] regained its LNCS volume number, verified against the DBLP proceedings record rather than asserted.
+- `check-whitepaper.mjs` takes `--name`, and `npm run docs` now checks the roadmap and the prior-art document too.
+  Only the whitepaper was ever verified against its renders; the others could drift silently.
+
+### Not claimed
+
+- That ESF solves botnets. The claim is that it raises the resource cost of abuse and does not eliminate access to
+  stolen computation.
+- That receiver-side policy answers Laurie and Clayton. Their objection to hybrids is a prediction that such designs
+  will be "very complex and … very fragile", it is unfalsified, and ESF is one of the designs it covers. Both
+  documents say so.
+
 ## v0.7.0
 
 Both clients, same number: this is the release where the Outlook add-in does what the Thunderbird one does, so the

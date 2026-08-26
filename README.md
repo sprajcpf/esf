@@ -37,10 +37,31 @@ Prototype quality: a stamp proves computing time was spent for a recipient, and 
 | [Technical Whitepaper (ODT)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.odt) | Rendered as an editable ODF text document |
 | [Technical Whitepaper (DOCX)](docs/ESF_End_Spam_Forever_Technical_Whitepaper.docx) | Rendered as a Word document |
 | [Adoption Roadmap](docs/ESF_End_Spam_Forever_Adoption_Roadmap.md) ([HTML](docs/ESF_End_Spam_Forever_Adoption_Roadmap.html), [ODT](docs/ESF_End_Spam_Forever_Adoption_Roadmap.odt), [DOCX](docs/ESF_End_Spam_Forever_Adoption_Roadmap.docx)) | How ESF gets from working prototype to ecosystem adoption: ordered stages with explicit exit criteria, no dates |
+| [Prior Art](docs/prior-art.md) ([HTML](docs/prior-art.html), [ODT](docs/prior-art.odt), [DOCX](docs/prior-art.docx)) | **Markdown source.** Long-form historical analysis: computational postage from Dwork/Naor and Hashcash through Camram, Penny Black and the integrations that shipped, the published criticism of the idea, and what it leaves unanswered |
 
 All renders are generated from the Markdown and then checked against it, dependency-free:
 `cd clients/thunderbird && npm run docs`. The check compares headings, tables, code blocks and key
 wording, so a format cannot silently drift out of sync again.
+
+## Prior art
+
+Computational postage for email is old ground, and ESF stands on it: Dwork and Naor's *Pricing via Processing or
+Combatting Junk Mail* (1992), Adam Back's Hashcash (announced 1997 and, by Back's own account, developed without
+knowledge of the Dwork/Naor paper — an independent rediscovery rather than a descendant), Eric S. Johansson's Camram,
+and Microsoft Research's Penny Black project. Hashcash also reached real mail software: Apache SpamAssassin shipped a
+verifying plugin with double-spend tracking for years, and the PennyPost extension minted stamps inside Thunderbird.
+
+ESF does not claim to have invented proof of work for email. It is a modern, interoperable, receiver-policy-driven
+implementation, aimed at the deployment, interoperability, usability and algorithm-agility problems that kept the
+earlier systems from broad adoption.
+
+The main published criticism is Laurie and Clayton's
+[*"Proof-of-Work" Proves Not to Work*](https://www.cl.cam.ac.uk/~rnc1/proofwork2.pdf) (2004), which concluded that a
+difficulty high enough to deter spammers would also price out a material share of legitimate senders. The whitepaper
+answers it in the open, including the parts it cannot answer.
+
+Long-form history, sources and criticism: [docs/prior-art.md](docs/prior-art.md). The short version is
+[section 2 of the whitepaper](docs/ESF_End_Spam_Forever_Technical_Whitepaper.md#2-prior-art).
 
 ## Clients
 

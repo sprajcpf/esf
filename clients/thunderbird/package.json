@@ -11,8 +11,9 @@
     "whitepaper": "node tools/render-whitepaper.mjs && node tools/render-whitepaper-odt.mjs && node tools/render-whitepaper-docx.mjs && node tools/check-whitepaper.mjs",
     "profile": "node tools/make-test-profile.mjs",
     "check:whitepaper": "node tools/check-whitepaper.mjs",
-    "roadmap": "node tools/render-whitepaper.mjs --name ESF_End_Spam_Forever_Adoption_Roadmap && node tools/render-whitepaper-odt.mjs --name ESF_End_Spam_Forever_Adoption_Roadmap && node tools/render-whitepaper-docx.mjs --name ESF_End_Spam_Forever_Adoption_Roadmap",
-    "docs": "npm run whitepaper && npm run roadmap"
+    "roadmap": "node tools/render-whitepaper.mjs --name ESF_End_Spam_Forever_Adoption_Roadmap && node tools/render-whitepaper-odt.mjs --name ESF_End_Spam_Forever_Adoption_Roadmap && node tools/render-whitepaper-docx.mjs --name ESF_End_Spam_Forever_Adoption_Roadmap && node tools/check-whitepaper.mjs --name ESF_End_Spam_Forever_Adoption_Roadmap",
+    "prior-art": "node tools/render-whitepaper.mjs --name prior-art && node tools/render-whitepaper-odt.mjs --name prior-art && node tools/render-whitepaper-docx.mjs --name prior-art && node tools/check-whitepaper.mjs --name prior-art",
+    "docs": "npm run whitepaper && npm run roadmap && npm run prior-art"
   },
   "engines": {
     "node": ">=20"

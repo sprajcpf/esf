@@ -15,6 +15,12 @@ says what ESF *is*; this document says in what order it can become something the
 
 **Objective.** Make large-scale unsolicited email economically expensive while keeping legitimate email simple.
 
+**What ESF is, and is not.** ESF does not claim to have invented proof of work for email: the idea and several
+implementations of it predate this project by decades (whitepaper 2, [prior-art.md](prior-art.md)). ESF is a modern,
+interoperable, receiver-policy-driven implementation, aimed at the deployment, interoperability, usability and
+algorithm-agility problems that kept the earlier systems from broad adoption. That is what makes this an adoption
+roadmap rather than a research agenda: the open questions it has to settle are deployment questions.
+
 > **No dates.** Every stage is expressed as a dependency, not a schedule. A stage begins when the exit criteria of
 > its prerequisites are met — not when a quarter starts. Where a stage cannot be entered, that is information about
 > the previous stage, not a reason to skip ahead.
@@ -26,12 +32,13 @@ says what ESF *is*; this document says in what order it can become something the
 Before planning adoption it is worth naming why this has not already happened, because the answer shapes every stage
 below.
 
-**Verifiers are not the bottleneck.** Apache SpamAssassin has shipped
-[`Mail::SpamAssassin::Plugin::Hashcash`](https://spamassassin.apache.org/full/3.1.x/doc/Mail_SpamAssassin_Plugin_Hashcash.html)
-for roughly two decades, complete with double-spend tracking of tokens. A receiver-side proof-of-work check for email
-has therefore been available, packaged and documented since before most current mail infrastructure was deployed, and
-it is used by almost nobody — because almost nobody sends stamps. The scarce resource in this ecosystem is not
-verification code; it is **senders who stamp** and **receivers who let a stamp change an outcome**.
+**Verifiers are not the bottleneck.** Apache SpamAssassin shipped
+[`Mail::SpamAssassin::Plugin::Hashcash`](https://spamassassin.apache.org/full/3.4.x/doc/Mail_SpamAssassin_Plugin_Hashcash.html)
+from the 3.0 series onwards, complete with double-spend tracking of tokens — and then removed it: the `UPGRADE` notes
+for SpamAssassin 4.0.0 state that "the HashCash module and support has been removed completely, as it has been long
+since deprecated". A receiver-side proof-of-work check for email was therefore available, packaged and documented for
+most of two decades, and was used by almost nobody — because almost nobody sends stamps. The scarce resource in this
+ecosystem is not verification code; it is **senders who stamp** and **receivers who let a stamp change an outcome**.
 
 **That is a two-sided deadlock**, and it defines the shape of this roadmap: no stage may depend on both sides moving
 at once. Every stage must be useful to whichever side adopts it first.
@@ -41,20 +48,55 @@ at once. Every stage must be useful to whichever side adopts it first.
 - A receiver that verifies into a world of unstamped mail gains a signal that is currently almost always absent —
   which is exactly why *absence must stay neutral* (whitepaper 11) and why `junkOnRed` ships off.
 
+**Where the earlier attempts left a documented reason for fading, it is not a cryptographic one.** Most of them left
+none at all — Camram and PennyPost simply stopped, with no retirement statement anywhere — but three records do say
+why, in their own words:
+
+- Microsoft Research's **Penny Black** project — the programme that investigated CPU-bound, memory-bound and
+  human-verification currencies for email postage — stated on its own project page in 2006 that "the research
+  component of this project is largely complete", and Dwork and Goldberg wrote alongside it that technological
+  feasibility had been demonstrated and that "making the scheme a reality is now a social, political, and business
+  question". The unsolved part was never the puzzle. Stages 4, 5, 9 and 10 are that question.
+- **SpamAssassin** retired its Hashcash support outright, with the terse justification quoted above. A verifier that
+  nobody feeds is maintenance cost without benefit — which is why Stage 5 asks for packaged configuration, a result
+  visible in the filter's own reporting and verification cost measured under production load, rather than for another
+  plugin in a tree.
+- **Mozilla bug 229686**, "Support for HashCash type of SPAM protection", was filed in 2003, collected 189 votes and
+  was closed WONTFIX in 2009 on the stated ground that a solution requiring near-universal adoption is not worth the
+  cost of considering. The objections recorded in the same bug are the adoption threshold ("this cannot happen until
+  major MUAs, most notably Outlook, support it"), botnet economics, an unresolved Microsoft patent claim over the
+  memory-bound work, and mailing lists and comparable legitimate bulk senders needing blanket allowlisting. The bug
+  also rejected the option that already existed, the PennyPost extension, partly on size: adding a 16 MB library to a
+  6 MB client was held to be unreasonable.
+
+Those are the failure modes the stages above and below are built to avoid, and the mapping is deliberate: absence
+stays neutral, so no stage needs universal adoption; Outlook is a reference client from Stage 0, not an afterthought;
+patent-free where possible is a guiding principle; forwarding and mailing lists are named questions in Stage 8; and
+the memory-hard profile has to arrive as a bounded verifier and a shipped client (Stages 1 and 5), not as a table
+larger than the client that carries it. **The botnet objection is not answered by this mapping.** It is one of the
+things Stage 10 has to measure, and the whitepaper's threat model (12) records that ESF cannot eliminate stolen
+computation.
+
 **The standing objection is twenty years old and still unanswered by most PoW proposals.** Laurie and Clayton,
 [*"Proof-of-Work" Proves Not to Work*](https://www.cl.cam.ac.uk/~rnc1/proofwork2.pdf) (2004), analysed real ISP
 traffic and concluded that a difficulty high enough to deter spammers would also block a material fraction of
-legitimate senders — with 93.5 % of machines sending fewer than 75 messages a day, they put legitimate collateral
-damage at 1–13 %. ESF's own cost model (whitepaper 7.4) reaches a compatible conclusion from the other end: no single
-SHA-256 difficulty is simultaneously bearable for a laptop and expensive for an operator with mining hardware.
+legitimate senders. In version 0.2 of the paper, 93.5 % of the machines they measured sent fewer than the global
+average of 60 non-list messages a day, but the tail put legitimate collateral damage at 0.6–1.6 % of customers on
+daily volume and 5–13 % on peak *hourly* volume — the hourly figure being the worse one, because a spammer sends
+around the clock and a person does not. ESF's own cost model (whitepaper 7.4) reaches a compatible conclusion from
+the other end: no single SHA-256 difficulty is simultaneously bearable for a laptop and expensive for an operator
+with mining hardware.
 
-ESF's answer is not that the objection is wrong. It is that the objection assumes a *uniform, mandatory* difficulty:
+ESF's answer is not that the objection is wrong. It is that the objection assumes a *uniform, mandatory* difficulty —
+which is the scope the authors themselves claim: their conclusion is against a universal scheme in which every
+message carries a proof, and they say explicitly that they have not analysed a hybrid, predicting instead that such
+schemes "will be very complex and, we believe, very fragile". ESF is one of the schemes that prediction covers.
 
 | Laurie/Clayton assumption | ESF's structural answer |
 |---|---|
 | Everyone pays the same difficulty | Trust-aware policy (whitepaper 7.3): known contacts, previous correspondents and authenticated senders pay **zero** |
 | A proof is a delivery permit | A stamp is one input to existing filtering; absence is neutral (whitepaper 11) |
-| Compute-bound work only | Algorithm agility: a memory-hard profile narrows the client-to-attacker gap by orders of magnitude (7.2, 7.4) |
+| Compute-bound work only | Algorithm agility: a memory-hard profile compresses the hardware spread (7.2, 7.4) — narrowing the gap, not closing it, since the paper already folded the best memory-bound figure of the day, a factor of four, into its own headroom |
 | Total work is the cost | Contemporaneity (6.7a) turns a stockpiled one-off expense into a required sustained *rate* |
 
 **Whether that answer holds is an empirical question, and it is the single most important thing this roadmap has to
@@ -295,19 +337,26 @@ Not: *please promote our project.*
 
 | Person / project | Background | Why ESF is relevant | Likely objection | Role | Channel |
 |---|---|---|---|---|---|
-| **Richard Clayton** (Cambridge Cybercrime Centre) | Co-author of [*"Proof-of-Work" Proves Not to Work*](https://www.cl.cam.ac.uk/~rnc1/proofwork2.pdf) (2004), the standing empirical refutation | ESF's trust-aware exemption and memory-hard profile are direct responses to his collateral-damage finding; his ISP-traffic method is the right way to test them | The 1–13 % legitimate-sender damage recurs; botnets externalise the cost | **Protocol critic**, research advisor | Institutional page / academic contact |
-| **Ben Laurie** | Co-author of the same paper; long career in applied cryptography and transparency systems | Same as above, plus a practitioner's view on what receivers will actually deploy | PoW is the wrong lever; reputation and authentication dominate | Protocol critic, reviewer | Public professional channels |
-| **Adam Back** | Author of [Hashcash](http://www.hashcash.org/hashcash.pdf), the design ESF descends from | ESF is the deployment-oriented successor to his cost function: recipient binding, algorithm agility, receiver policy | Difficulty calibration and ASIC economics; hashcash's own adoption history | Reviewer, **amplifier** | Public professional channels |
-| **Cynthia Dwork**, **Moni Naor** | *Pricing via Processing or Combatting Junk Mail* (1992); later memory-bound functions | The originators of the pricing argument and of memory-hardness, which is exactly ESF's second profile | Parameter choice needs proof, not benchmarks | Research advisors | Institutional contact |
-| **L. Jean Camp**, **Debin Liu** | *Proof of Work can Work* — the counter-analysis to Laurie/Clayton | Already argued the affirmative case; best placed to say which conditions ESF must meet for it to hold | Their conditions may not match ESF's parameters | Research advisors | Institutional contact |
-| **Justin Mason** / Apache SpamAssassin | Author of the long-standing SpamAssassin Hashcash plugin with double-spend tracking | The closest existing ancestor of ESF's replay ledger, and the clearest evidence about *why* stamps never arrived | "We shipped this; nobody sent tokens" | **Reviewer**, integration partner | Apache SpamAssassin lists / issue tracker |
-| **Vsevolod Stakhov** / Rspamd | Author and maintainer of the most widely deployed open-source filter | Stage 5 lands here first; Rspamd's scoring model is the natural home for a small ESF adjustment | Cost per message under load; another rarely-firing symbol | **Independent implementer**, integration partner | Rspamd GitHub / mailing list |
+| **Richard Clayton** (University of Cambridge Computer Laboratory) | Co-author of [*"Proof-of-Work" Proves Not to Work*](https://www.cl.cam.ac.uk/~rnc1/proofwork2.pdf) (WEIS 2004; version 0.2, September 2004), the standing empirical refutation; author of a decade of follow-on measurement work, including *On the difficulty of counting spam sources* (CEAS 2010), which shows that the same data supports bot-population estimates an order of magnitude apart | ESF's trust-aware exemption and memory-hard profile are direct responses to his collateral-damage finding; his ISP-traffic method is the right way to test them, and his own counting caveat applies to any botnet figure either side quotes | The legitimate-sender damage recurs, worst on hourly volume; botnets externalise the cost | **Protocol critic**, research advisor | Institutional page / academic contact |
+| **Ben Laurie** | Co-author of the same paper; long career in applied cryptography and transparency systems | Same as above, plus a practitioner's view on what receivers will actually deploy | PoW is the wrong lever; hybrid schemes are "very complex and … very fragile", which is the paper's own prediction about designs like ESF | Protocol critic, reviewer | Public professional channels |
+| **Adam Back** | Author of [Hashcash](http://www.hashcash.org/hashcash.pdf) — announced in 1997 and, as his 2002 report states, written without knowledge of Dwork and Naor's 1992 paper, so an independent rediscovery rather than a descendant | ESF's stamp reuses his cost-function shape and adds recipient binding, algorithm agility and receiver policy; the adoption history of hashcash itself is the part ESF has to explain rather than repeat | Difficulty calibration and ASIC economics; hashcash's own adoption history | Reviewer, **amplifier** | Public professional channels |
+| **Cynthia Dwork**, **Moni Naor** | *Pricing via Processing or Combatting Junk Mail* (CRYPTO 1992), whose pricing functions were number-theoretic — square roots mod p, Fiat–Shamir, Ong–Schnorr–Shamir — and contained no hash proof-of-work at all; with **Andrew Goldberg**, *On Memory-Bound Functions for Fighting Spam* (CRYPTO 2003), and both members of Microsoft Research's Penny Black project | The originators of the pricing argument and of memory-hardness, which is exactly ESF's second profile; their measured spread of about four between slowest and fastest machine is the figure ESF's difficulty policy has to work with | Parameter choice needs proof, not benchmarks | Research advisors | Institutional contact |
+| **L. Jean Camp**, **Debin Liu** | *Proof of Work can Work* (WEIS 2006) — the counter-analysis that accepts Laurie/Clayton's parameters and attacks only their uniformity assumption, weighting the work requirement by a sender-reputation function calibrated on their own figures | Already argued the affirmative case; best placed to say which conditions ESF must meet for it to hold | Their result rests on assumed filter and reputation accuracy and was never measured on a deployed system; ESF's parameters may not match their conditions | Research advisors | Institutional contact |
+| **Paul Gardner-Stephen** | *Escalating the War on SPAM Through Practical POW Exchange* (IEEE Conference on Networking, 2007), which accepts the Laurie/Clayton refutation of uniform-cost work and proposes Targeted-Cost Proof-of-Work instead: the receiving site's own filter decides which messages are challenged, tuned per receiver | The closest published precedent for ESF's receiver-driven policy, argued from Laurie/Clayton's own distribution | Effectiveness is proportional to filter accuracy, and filter accuracy varies from site to site; none of his cost figures are measured | Research advisor, **protocol critic** | Institutional contact |
+| **Apache SpamAssassin** (the Hashcash plugin's history) | The project shipped `Plugin::Hashcash` from the 3.0 series: bonus-only scoring from −0.5 at 20 bits to −5.0 above 25, double spending scored at just +0.1 because legitimate mail can trip it, a per-user token database that was never expired, and no effect at all unless `hashcash_accept` was configured — then removed the module completely in 4.0.0 | The closest existing ancestor of ESF's replay ledger, and the clearest documented evidence of what happens to a verifier nobody feeds | "We shipped this; nobody sent tokens" | **Reviewer**, integration partner | Apache SpamAssassin lists / issue tracker |
+| **Vsevolod Stakhov** / Rspamd | Author and maintainer of the most widely deployed open-source filter. Rspamd has never had hashcash or proof-of-work support: neither term occurs in the 4.1 source tree or the module documentation, and its SpamAssassin compatibility layer implements only three `eval:` functions, so the old `25_hashcash.cf` rules cannot simply be imported | Stage 5 lands here first; Rspamd's negative-weight symbol model is the natural home for a small ESF adjustment, but it has to be written as a Lua symbol with its own state, not ported | Cost per message under load; another rarely-firing symbol | **Independent implementer**, integration partner | Rspamd GitHub / mailing list |
+| **Eric S. Johansson** / Camram | Built the hybrid sender-pays system that ran hashcash on first contact and opportunistic signatures plus a whitelist afterwards, layered over a Bayesian filter so a lone adopter was never worse off — the incremental-deployment argument this roadmap depends on. Code shipped (last release file 2004); project content disappears from the web after 2007; the one contemporaneous complaint on the record is installation complexity, which he conceded | Camram made the "useful to the first adopter" case before ESF did, and its own objection list — hardware stamp accelerators, zombie stamp farms, stamp deflation, mailing lists unsolved — is a ready-made review of ESF | Installation and operational complexity sink such systems long before the cryptography does | **Protocol critic**, reviewer | Public professional channels |
+| **Aliasgar Lokhandwala**, **Jonas Oestman** / PennyPost | Wrote and maintained the Thunderbird extension (2007–2016) that minted and verified per-recipient hashcash and MBound stamps and advertised accepted protocols and prices in an `x-stampprotocols` header; declared compatibility ends at Thunderbird 38, and the 16 MB MBound table was held against it in Mozilla bug 229686 | The direct predecessor of ESF's Thunderbird client, in the same slot, and its capability header prefigures ESF's policy discovery (whitepaper 8). Its size and its external Java dependency are exactly what ESF must not repeat | Client-side stamping is a maintenance treadmill against platform API churn | Reviewers | Public project channels |
+| **Andrey Zholos** / Hashcash Milter | Wrote a libmilter filter that both mints and verifies hashcash stamps in transit, with a distinct stamp per recipient, `To`/`Cc` only so that a stamp cannot reveal a `Bcc`, a difficulty discount as recipient count doubles, and a minting-time cap set against the SMTP timeout | A working precedent for Stage 5's server-side surface, including the two problems ESF also has: Bcc exposure and minting inside a timed transaction | Minting in the SMTP path is the wrong place for work | **Independent implementer**, reviewer | Public project channels |
 | **Wietse Venema** / Postfix | Postfix author | ESF-SMTP (whitepaper 9) cannot exist without MTA authors finding it acceptable | Envelope-level work belongs nowhere near the SMTP path | Protocol critic | Postfix mailing list |
 | **Stalwart, mailcow and comparable modern stacks** | Actively developed mail servers with room for new checks | Small, fast-moving projects are the realistic first server-side implementers | Maintenance burden for an unadopted protocol | Independent implementers | Project issue trackers |
 | **Xe Iaso** / [Anubis](https://en.wikipedia.org/wiki/Anubis_(software)) | Author of the SHA-256 proof-of-work gate now deployed across FOSS infrastructure (GNOME, FFmpeg, Wine, kernel archives) | The strongest current evidence that PoW gating is operationally acceptable *today*, plus hard-won lessons about legitimate-client fallout | Client diversity and accessibility fallout; PoW as an arms race | **Reviewer, amplifier** | Public project channels |
 | **Aravinth Manivannan** / mCaptcha | Load-adaptive proof-of-work difficulty | Difficulty as a function of current load is a policy model ESF's `policy.js` seam could adopt for receivers under attack | Fixed difficulty is the wrong control | Contributor, reviewer | Project repository |
-| **Thunderbird add-on reviewers**; **Betterbird** | Gatekeepers and close observers of the client platform | Stage 4 passes through them; they see what breaks for real users | Send-path add-ons are risky; UI clutter | Reviewers | Add-on review process / project channels |
+| **Thunderbird add-on reviewers**; **Betterbird** | Gatekeepers and close observers of the client platform — the same platform on which bug 229686 was argued and closed WONTFIX | Stage 4 passes through them; they see what breaks for real users | Send-path add-ons are risky; UI clutter | Reviewers | Add-on review process / project channels |
 | **Mailop**, **M³AAWG** | Operator and anti-abuse communities | The audience that decides whether a signal is worth acting on | "Another header we have to ignore"; forwarding and list breakage | Reviewers, **amplifiers** | Community mailing lists / membership process |
+
+The table lists work that is on the public record and the channel *kind* through which each project or author
+publishes. It records no contact details, and **nobody in it has been contacted**: this stage has not begun.
 
 ### Rules for this stage
 
