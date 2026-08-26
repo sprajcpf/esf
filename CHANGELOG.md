@@ -3,6 +3,17 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.4.1 (Thunderbird client)
+
+### Fixed
+
+- **"Verify again" now shows that it did something.** Verifying a stamp is a single hash, and a repeat verification
+  comes out of a cache, so the result arrived faster than a person can perceive and the button appeared dead. The
+  panel now replaces the verdict with "Verifying…" and dims the details while it works, and the new verdict is held
+  back until that has been visible for at least half a second. The work still starts immediately — the floor delays
+  the *result*, never the computation, and an operation slower than the floor is not slowed further. Opening the
+  popup keeps no floor at all, because it already shows "Checking…" on open.
+
 ## v0.4.0 (Thunderbird client)
 
 Thunderbird only; the Outlook client stays at 0.3.0 because nothing in it changed. From here the clients are

@@ -144,3 +144,9 @@ progress {
 }
 
 .hidden { display: none !important; }
+
+/* Being recomputed: dimmed rather than emptied, so the panel does not jump while it refreshes. */
+dl.details.refreshing {
+  opacity: 0.45;
+  transition: opacity 120ms ease-out;
+}

@@ -11,6 +11,8 @@ const hintEl = document.getElementById("hint");
 const detailsEl = document.getElementById("details");
 const disclosure = document.getElementById("disclosure");
 
+import { MINIMUM_FEEDBACK_MS, atLeast } from "../utils/timing.js";
+
 const HEADLINE = {
   green: "Proof of work verified",
   yellow: "Weak proof of work",
@@ -95,14 +97,48 @@ function render(result) {
   }
 }
 
-async function load(force) {
-  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
-  const tabId = tabs.length > 0 ? tabs[0].id : null;
+async function verify(tabId, force) {
   const result = await browser.runtime.sendMessage({ type: "esf:getVerification", tabId, force });
-  render(result && result.state ? result : { state: "missing", signal: "red", reason: "no-stamp" });
+  return result && result.state ? result : { state: "missing", signal: "red", reason: "no-stamp" };
 }
 
-document.getElementById("recheck").addEventListener("click", () => load(true));
+async function currentTabId() {
+  const tabs = await browser.tabs.query({ active: true, currentWindow: true });
+  return tabs.length > 0 ? tabs[0].id : null;
+}
+
+async function load() {
+  render(await verify(await currentTabId(), false));
+}
+
+/**
+ * Re-verify on request, with visible feedback.
+ *
+ * The result is replaced by "Verifying…" and the details are dimmed, so it is obvious that the old verdict is being
+ * recomputed rather than merely redisplayed - and the new verdict is held back until that has been on screen long
+ * enough to see. Only this path has the floor: adding it to opening the popup would make the popup feel slow for no
+ * gain, because "Checking…" is what it shows on open anyway.
+ */
+async function recheck() {
+  const button = document.getElementById("recheck");
+  button.disabled = true;
+  statusEl.className = "status";
+  statusText.textContent = "Verifying…";
+  hintEl.textContent = "";
+  detailsEl.classList.add("refreshing");
+  try {
+    render(await atLeast(verify(await currentTabId(), true), MINIMUM_FEEDBACK_MS));
+  } catch (error) {
+    statusEl.className = "status red";
+    statusText.textContent = "Could not verify";
+    hintEl.textContent = String(error && error.message ? error.message : error);
+  } finally {
+    detailsEl.classList.remove("refreshing");
+    button.disabled = false;
+  }
+}
+
+document.getElementById("recheck").addEventListener("click", () => recheck());
 document.getElementById("options").addEventListener("click", () => {
   browser.runtime.openOptionsPage();
   window.close();
@@ -111,4 +147,4 @@ disclosure.addEventListener("toggle", () => {
   disclosure.querySelector("summary").textContent = disclosure.open ? "Hide details" : "Details";
 });
 
-load(false);
+load();
