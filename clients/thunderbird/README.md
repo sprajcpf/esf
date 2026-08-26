@@ -104,6 +104,15 @@ npm run package -- --out ~/Downloads         # or straight into a directory of y
 forward-slashed (PowerShell's `Compress-Archive` writes backslashes, which Thunderbird cannot read) and timestamps
 are fixed, so the same sources always produce a byte-identical `.xpi`.
 
+## Publishing to addons.thunderbird.net
+
+`STORE_LISTING.md` holds the complete listing copy, the permission justifications and the reviewer notes, so a
+submission is copy-and-paste. The upload itself needs a Thunderbird account with a signed Developer Agreement.
+
+The package passes the mechanical review criteria: no build step, so every shipped file is readable source; no
+`eval`, no `new Function`, no `innerHTML`; no remote or dynamically loaded code; no host permissions; no network
+requests at all.
+
 ## Development
 
 ```bash
