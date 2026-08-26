@@ -10,6 +10,7 @@ import {
   Signal,
   StampState,
   canonicalMailbox,
+  classifySender,
   receiverPolicy,
   stampId,
   verifyMessageStamps
@@ -76,7 +77,7 @@ export function messageReference(item, receivedAt, dateMs, now = Date.now()) {
 
 export async function verifyCurrentMessage(item, settings) {
   const headerBlock = await getAllInternetHeaders(item);
-  const { stampValues, messageId, from, receivedAt, dateMs } = extractEsfHeaders(headerBlock);
+  const { stampValues, messageId, from, receivedAt, dateMs, headers } = extractEsfHeaders(headerBlock);
   const policy = receiverPolicy(settings);
   const fromMailbox = (item && item.from && item.from.emailAddress) || from;
 
@@ -108,7 +109,10 @@ export async function verifyCurrentMessage(item, settings) {
     results: outcome.results,
     headerCount: stampValues.length,
     skipped: outcome.skipped,
-    headersAvailable: headerBlock.length > 0
+    headersAvailable: headerBlock.length > 0,
+    // Whether there is plausibly a person at the other end. Not a spam verdict and not part of the protocol result:
+    // it only decides whether the task pane may offer to write to this sender (see compose/suggest.js).
+    sender: classifySender({ headers, author: fromMailbox || from })
   };
 
   // Replay is only interesting for stamps that are otherwise acceptable (whitepaper 6.7 step 8).

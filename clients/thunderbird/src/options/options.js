@@ -115,7 +115,7 @@ function formatSeconds(seconds) {
   return `${(seconds / 60).toFixed(1)} min`;
 }
 
-document.getElementById("footerPreview").textContent = footerPreview();
+document.getElementById("footerPreview").textContent = footerPreview(browser.i18n.getUILanguage());
 
 loadSettings().then(settings => {
   applyToForm(settings);

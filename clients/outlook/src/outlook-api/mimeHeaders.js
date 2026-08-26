@@ -11,6 +11,12 @@ import { ACCEPTED_HEADER_NAMES } from "../esf-core.js";
 /** The raw header block of a message may legitimately be large, but headers beyond this cannot matter to ESF. */
 const MAX_HEADER_BLOCK_LENGTH = 512 * 1024;
 const MAX_HEADER_LINES = 4000;
+/**
+ * Bounds for the header dictionary handed to the sender classifier. It only reads presence and first values, so a
+ * hostile sender must not be able to make the dictionary large by repeating a field or padding one value.
+ */
+const MAX_HEADER_VALUE_LENGTH = 1000;
+const MAX_VALUES_PER_NAME = 10;
 
 /**
  * Unfolds an RFC 5322 header block into "Name: value" lines.
@@ -64,12 +70,18 @@ export function parseReceivedTime(received) {
  * for stamp freshness - the *topmost* Received field (written by the receiving infrastructure, not the sender's to
  * choose) with the sender-controlled Date header only as fallback.
  *
+ * It also returns every field as a lower-cased name to values dictionary, in the shape Thunderbird's
+ * messages.getHeaders produces, because the shared sender classifier decides on fields this module has no business
+ * knowing about (List-Id, Precedence, Auto-Submitted, ...). Listing them here would duplicate that decision.
+ *
  * @param {string} block output of getAllInternetHeadersAsync()
  * @returns {{stampValues: string[], messageId: string, from: string, receivedAt: number|undefined,
- *            dateMs: number|undefined}}
+ *            dateMs: number|undefined, headers: Record<string, string[]>}}
  */
 export function extractEsfHeaders(block) {
   const stampValues = [];
+  /** @type {Record<string, string[]>} */
+  const headers = {};
   let messageId = "";
   let from = "";
   let receivedAt;
@@ -81,6 +93,10 @@ export function extractEsfHeaders(block) {
     }
     const name = line.slice(0, colon).trim().toLowerCase();
     const value = line.slice(colon + 1).trim();
+    const collected = headers[name] || (headers[name] = []);
+    if (collected.length < MAX_VALUES_PER_NAME) {
+      collected.push(value.length > MAX_HEADER_VALUE_LENGTH ? value.slice(0, MAX_HEADER_VALUE_LENGTH) : value);
+    }
     if (ACCEPTED_HEADER_NAMES.includes(name)) {
       stampValues.push(value);
     } else if (name === "message-id" && !messageId) {
@@ -94,5 +110,5 @@ export function extractEsfHeaders(block) {
       dateMs = Number.isFinite(parsed) ? parsed : undefined;
     }
   }
-  return { stampValues, messageId, from, receivedAt, dateMs };
+  return { stampValues, messageId, from, receivedAt, dateMs, headers };
 }

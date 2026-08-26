@@ -95,3 +95,38 @@ textarea {
   font-family: inherit;
   font-size: 13px;
 }
+
+/* Action row under the traffic light. The suggestion is first and filled; re-verify stays a quiet neighbour. */
+.actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.actions button {
+  font: inherit;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.actions button.primary {
+  background: #0f6cbd;
+  border-color: #0f6cbd;
+  color: #fff;
+  font-weight: 600;
+}
+
+.actions button[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Dimmed while a re-verification runs, so the visible detail is not mistaken for the new result. */
+.refreshing {
+  opacity: 0.45;
+}

@@ -21,6 +21,10 @@ Both clients are published as installable packages with every release:
 
 ### → [Latest release](https://github.com/sprajcpf/esf/releases/latest)
 
+Both clients carry the same version number when they do the same thing, so `0.7.0` in Thunderbird and `0.7.0` in
+Outlook behave alike. The text ESF puts into a message - the footer and the note to a sender who has no stamp - is
+written in German for a German mail client and in English for every other language.
+
 Prototype quality: a stamp proves computing time was spent for a recipient, and nothing else. Read
 [SECURITY.md](SECURITY.md) before relying on it.
 

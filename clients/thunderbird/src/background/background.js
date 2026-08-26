@@ -6,7 +6,7 @@
  */
 
 import { Signal, StampState } from "../protocol/constants.js";
-import { SUGGESTION } from "../ui/strings.js";
+import { suggestionFor } from "../ui/strings.js";
 import { PROJECT_URL } from "../utils/footer.js";
 import { ComposePhase, ComposeSigner } from "./composeSigner.js";
 import { PowSolver } from "./solver.js";
@@ -276,7 +276,10 @@ async function suggestEsfToSender(tabId, state, reason) {
     return { ok: false, reason: "no-message" };
   }
   const invalid = state === StampState.INVALID;
-  const template = invalid ? SUGGESTION.invalid : SUGGESTION.missing;
+  // The user's own client language, not the sender's: this is the user's draft, and it is the only language we can
+  // actually know. Guessing the recipient's from their address or their message would be worse than a fair default.
+  const text = suggestionFor(browser.i18n.getUILanguage());
+  const template = invalid ? text.invalid : text.missing;
   try {
     await browser.compose.beginReply(message.id, "replyToSender", {
       isPlainText: true,

@@ -37,11 +37,25 @@ export {
   generateStamp,
   messageIdToken,
   normalizeMessageId,
+  probeWorkBase,
   recipientToken,
   searchNonce,
   senderToken,
   unixSeconds
 } from "../../thunderbird/src/protocol/stamp.js";
+
+/**
+ * Estimation helpers. Pure arithmetic over a measured hash rate, with no client API in sight, so both clients derive
+ * the same difficulty from the same measurement instead of each inventing its own curve.
+ */
+export {
+  autoDifficulty,
+  blendRate,
+  expectedSeconds,
+  formatRate,
+  formatSeconds,
+  hashRate
+} from "../../thunderbird/src/utils/estimate.js";
 
 export { parseStamp, parseStampList, serializeStamp, serializeStampList } from "../../thunderbird/src/protocol/parser.js";
 
@@ -50,3 +64,25 @@ export { stampId, verifyMessageStamps, verifyStamp } from "../../thunderbird/src
 export { receiverPolicy, resolveOutgoingDifficulty } from "../../thunderbird/src/protocol/policy.js";
 
 export { countLeadingZeroBits, randomHex, sha256, toBase64Url, toHex } from "../../thunderbird/src/protocol/hash.js";
+
+// --- Shared client logic and product wording ---------------------------------------------------------------------
+// Not protocol, but equally shared: whether it makes sense to talk to a sender, the wording used to do it, and the
+// feedback floor that makes an instant verification visible. Copying any of it would let the two clients drift into
+// warning users differently about the same risk, so the Outlook adapter imports it through this surface too.
+
+export { classifySender } from "../../thunderbird/src/utils/sender.js";
+
+export {
+  SUGGESTION,
+  SUGGESTION_LABELS,
+  SUGGESTION_NOTE,
+  TEXT_LANGUAGES,
+  suggestionFor,
+  textLanguage
+} from "../../thunderbird/src/ui/strings.js";
+
+// footerFor picks the German or English footer. Both clients read the same table, so a recipient cannot tell from
+// the footer which add-on sent the message - only which language its sender writes in.
+export { PROJECT_URL, footerFor } from "../../thunderbird/src/utils/footer.js";
+
+export { MINIMUM_FEEDBACK_MS, atLeast } from "../../thunderbird/src/utils/timing.js";

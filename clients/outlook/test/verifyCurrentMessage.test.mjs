@@ -69,3 +69,38 @@ test("a stamp minted long before its message is red: stamp-too-old", async () =>
   assert.equal(result.reason, Reason.STAMP_TOO_OLD);
   assert.equal(result.signal, Signal.RED);
 });
+
+test("the result carries a sender classification, so the task pane knows whether to offer a reply", async () => {
+  const block = "From: Bob <bob@example.org>\r\nSubject: hi\r\n\r\nbody";
+  const result = await verifyCurrentMessage(fakeItem(block), settings());
+  assert.equal(result.state, StampState.MISSING);
+  assert.equal(result.sender.replyable, true);
+  assert.equal(result.sender.reason, null);
+});
+
+test("a mailing list message is classified as not worth replying to", async () => {
+  const block = "From: news@example.org\r\nList-Id: <news.example.org>\r\nList-Post: <mailto:x@example.org>\r\n\r\nb";
+  const result = await verifyCurrentMessage(fakeItem(block), settings());
+  assert.equal(result.sender.list, true);
+  assert.equal(result.sender.replyable, false);
+  assert.match(result.sender.reason, /mailing list/);
+});
+
+test("an automated sender is classified from Auto-Submitted, and \"no\" is not automation", async () => {
+  const auto = "From: bob@example.org\r\nAuto-Submitted: auto-replied\r\n\r\nb";
+  assert.equal((await verifyCurrentMessage(fakeItem(auto), settings())).sender.automated, true);
+  const human = "From: bob@example.org\r\nAuto-Submitted: no\r\n\r\nb";
+  assert.equal((await verifyCurrentMessage(fakeItem(human), settings())).sender.automated, false);
+});
+
+test("a no-reply address is recognised from the item's own From, not only the header", async () => {
+  const item = {
+    from: { emailAddress: "no-reply@example.org" },
+    getAllInternetHeadersAsync(callback) {
+      callback({ status: "succeeded", value: "From: Newsletter <no-reply@example.org>\r\n\r\nb" });
+    }
+  };
+  const result = await verifyCurrentMessage(item, settings());
+  assert.equal(result.sender.noReply, true);
+  assert.equal(result.sender.replyable, false);
+});

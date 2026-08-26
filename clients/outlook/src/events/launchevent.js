@@ -16,6 +16,7 @@ import { currentItem, getFromMailbox, getRecipientMailboxes, notify, setInternet
 import { loadSettings } from "../settings/settings.js";
 import { appendFooter } from "../compose/footer.js";
 import { mintStamps } from "../compose/sendSigner.js";
+import { loadCalibration, machineKey, recordMeasurement } from "../compose/calibration.js";
 
 const NOTICE_KEY = "esfSendNotice";
 
@@ -36,7 +37,10 @@ function deny(event, message) {
 async function handleMessageSend(event) {
   const settings = loadSettings();
   const item = currentItem();
-  if (!settings.enabled || settings.outgoingDifficulty <= 0 || !item) {
+  // outgoingDifficulty is the fixed-mode knob only: in automatic mode the difficulty comes from the machine, so a
+  // stored 0 there must not read as "generation off" and silently stop stamping every send.
+  const disabled = settings.difficultyMode === "fixed" && settings.outgoingDifficulty <= 0;
+  if (!settings.enabled || disabled || !item) {
     allow(event);
     return;
   }
@@ -61,20 +65,34 @@ async function handleMessageSend(event) {
       getRecipientMailboxes(item.cc),
       getRecipientMailboxes(item.bcc)
     ]);
+    // The one Office-touching part of calibration: a synchronous read out of the roamingSettings copy that is
+    // already in memory, so nothing is added to the critical path. The ~250 ms probe inside mintStamps only runs when
+    // this read came back without a usable rate.
+    const machine = machineKey();
+    const calibration = settings.difficultyMode === "auto" ? loadCalibration(machine) : null;
     const outcome = await mintStamps({
       from,
       to: to.mailboxes,
       cc: cc.mailboxes,
       bcc: bcc.mailboxes,
-      settings
+      settings,
+      calibration
     });
+    // Every send is a free measurement of this machine, and recording it is what makes automatic mode adapt. It has
+    // to happen before event.completed: Outlook may tear the event runtime down as soon as the send is released, and
+    // an unsaved roamingSettings write would be lost with it.
+    if (outcome.automatic) {
+      await recordMeasurement(outcome.rate || outcome.probedRate, machine);
+    }
 
     if (outcome.status === "done") {
       const written = await setInternetHeaders(item, { [STANDARD_HEADER_NAME]: outcome.headerValue });
       if (!written) {
         throw new Error("internetHeaders.setAsync failed");
       }
-      console.log(`[esf] ${outcome.stampCount} stamp(s), ${outcome.hashes} hashes, ${outcome.elapsedMs} ms`);
+      const usedDifficulty = outcome.difficulty || settings.outgoingDifficulty;
+      console.log(`[esf] ${outcome.stampCount} stamp(s) at difficulty ${usedDifficulty} ` +
+        `(${outcome.rateSource || "fixed"}), ${outcome.hashes} hashes, ${outcome.elapsedMs} ms`);
       // Only now, with a stamp actually written, may the footer advertise one.
       if (settings.appendFooter) {
         await appendFooter(item);

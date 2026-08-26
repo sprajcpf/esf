@@ -16,7 +16,24 @@ const STORAGE_KEY = "esfSettings";
 export const DEFAULTS = Object.freeze({
   /** Master switch for outgoing stamp generation. Verification of incoming mail stays active. */
   enabled: true,
-  /** Baseline outgoing difficulty in leading zero bits; 0 disables generation. */
+  /**
+   * How the outgoing difficulty is chosen.
+   *
+   * "auto" is the default and the point of the whole setting: the user says how long a send may take, and the
+   * difficulty follows from what this machine measurably manages, adjusting upwards on a fast machine and downwards
+   * on a slow one. "fixed" is for people who want a specific number and accept the wait that comes with it.
+   */
+  difficultyMode: "auto",
+  /**
+   * What a send should typically cost the user in automatic mode.
+   *
+   * Two seconds rather than three: this is an *expectation*, and the search is memoryless, so about a quarter of
+   * sends take twice as long as the target and one in seven takes twice that again. Aiming at two keeps the tail
+   * where people do not notice it - and in Outlook the tail is not merely annoying, it runs into the Smart Alerts
+   * "still working" dialog after roughly five seconds.
+   */
+  autoTargetSeconds: 2,
+  /** Difficulty used when difficultyMode is "fixed", in leading zero bits; 0 disables generation. */
   outgoingDifficulty: DEFAULT_DIFFICULTY,
   /**
    * Quiet phase per recipient, in seconds - kept for parity with the Thunderbird client, where the search shows
@@ -69,6 +86,8 @@ export function normalizeSettings(raw) {
     ...DEFAULTS,
     ...input,
     enabled: input.enabled !== false,
+    difficultyMode: input.difficultyMode === "fixed" ? "fixed" : "auto",
+    autoTargetSeconds: clamp(Number(input.autoTargetSeconds), 1, 60, DEFAULTS.autoTargetSeconds),
     outgoingDifficulty: SELECTABLE_DIFFICULTY.includes(outgoingDifficulty)
       ? outgoingDifficulty
       : DEFAULTS.outgoingDifficulty,

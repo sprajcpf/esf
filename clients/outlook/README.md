@@ -143,6 +143,29 @@ Color categories ("ESF Green/Yellow/Red") could surface the status in the messag
 `ReadWriteMailbox` permission, pollute the user's category list and roam server-side. If added, it stays an opt-in
 setting and never touches unrelated user categories. The manifest deliberately stays at `ReadWriteItem` until then.
 
+## Where this client differs from the Thunderbird one
+
+Both clients carry the same version number, because they offer the same features (see the versioning rule in
+[CONTRIBUTING.md](../../CONTRIBUTING.md)). What differs is what Office.js can do, measured rather than assumed:
+
+| | Thunderbird | Outlook | Why |
+|---|---|---|---|
+| Search | worker pool, `min(4, cores-2)` threads | single-threaded | the classic Windows event runtime has no `Worker`, so the difficulty reachable inside the same budget is roughly two bits lower on the same machine |
+| Progress during a send | window with honest estimate and a *send faster* option | none | the send event has no UI surface at all; the only lever left is the timeout policy |
+| Difficulty calibration | `browser.storage.local`, per profile, keyed by worker count | `roamingSettings`, per mailbox, keyed by `hardwareConcurrency` | roamingSettings roams: one mailbox on a fast desktop and a slow laptop share the store, so the rate is kept per machine and pruned to eight entries |
+| Settings changes seen live | yes, `storage.onChanged` | on next load of the event runtime | there is no change listener for roamingSettings |
+| Reply draft | plain text | HTML only | the reply form takes only `htmlBody`; the shared plain text becomes one `<p>` per paragraph with no `<br>`, so the no-pre-wrapping rule survives |
+| Sender classification | always available | requirement set 1.8+ | below that there is no header access, and rather than point a write-to-a-stranger button at unclassifiable mail the offer is suppressed with an explanation |
+| Panel closes after opening the draft | yes | no | a task pane cannot close itself |
+
+## Language
+
+The footer and the note to a sender who has no stamp exist in German and English. The language comes from
+`Office.context.displayLanguage` - the interface language, not `contentLanguage`, which on many installations is left
+at the OS default and says less about the user. `de` in any region gets German; everything else gets English by
+design, since a half-translated mail is worse than an English one. The interface of the task pane itself stays
+English in both clients.
+
 ## Development
 
 ```powershell

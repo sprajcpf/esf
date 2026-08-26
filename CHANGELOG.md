@@ -3,6 +3,51 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.7.0
+
+Both clients, same number: this is the release where the Outlook add-in does what the Thunderbird one does, so the
+version numbers are brought back together (see the versioning rule in CONTRIBUTING.md). The Outlook client jumps from
+0.3.0 for that reason - nothing was skipped.
+
+### Added
+
+- **The sender suggestion and the footer exist in German.** Both clients pick the language from the mail client's own
+  interface language: German for `de` in any region, English for everything else. The German text is not a
+  translation - it is the same story told the way it would be told in German, because a translated mail reads as a
+  form letter and this one has to read as a person writing. It uses "Sie", since the reader is whoever happened to
+  write to the user and may well be a stranger.
+- **Outlook: automatic difficulty.** The add-in measures the machine once, remembers the rate per machine in
+  roamingSettings, and picks the difficulty that fits the two-second target - the same automatic/fixed choice
+  Thunderbird offers, with the same 18-bit floor and 26-bit ceiling. The measurement uses a realistic-length input
+  from the start, so the trap fixed in 0.6.2 was never shipped here.
+- **Outlook: the read-side surface reaches parity.** The suggestion button comes first and primary, "Verify again"
+  gives visible feedback with the same 500 ms floor, details are collapsed, and the same sender classification
+  decides whether offering a reply makes sense at all - a mailing list, an automated notice or a no-reply address
+  gets no button.
+
+### Changed
+
+- The two sentences next to the suggestion button - the labels and the caution that a reply tells a stranger the
+  address is real - moved into the shared text module. Both clients now render identical wording rather than two
+  hand-maintained copies. Interface text stays English in both, deliberately: one German button in an otherwise
+  English panel reads as a bug, and localising a surface is a job for the whole surface at once.
+- Outlook's header reader now hands the whole header dictionary to the shared classifier instead of listing
+  `List-Id`, `Precedence` and `Auto-Submitted` itself.
+
+### Platform differences that remain
+
+These are Office.js limits rather than missing work, and they are documented in `clients/outlook/README.md` rather
+than encoded in a version number nobody could interpret:
+
+- No worker pool in the classic Windows event runtime, so the search is single-threaded and the difficulty reachable
+  inside the same budget is roughly two bits lower than Thunderbird's on the same machine.
+- No progress surface during a send: the event runtime has no UI, so there is no "send faster" option, only the
+  timeout policy.
+- Reply drafts are HTML only; the shared plain text becomes one paragraph element each, with no hard breaks, so the
+  no-pre-wrapping rule survives.
+- Below requirement set 1.8 there is no header access, so the classifier would see nothing - the offer is suppressed
+  with an explanation rather than pointed at unclassifiable mail.
+
 ## v0.6.2 (Thunderbird client)
 
 ### Fixed

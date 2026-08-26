@@ -6,7 +6,15 @@
  * computational work was demonstrated" - never "this email is safe" and never sender authentication.
  */
 
-import { Reason, SELECTABLE_DIFFICULTY, Signal, StampState } from "../esf-core.js";
+import {
+  MINIMUM_FEEDBACK_MS,
+  Reason,
+  SELECTABLE_DIFFICULTY,
+  Signal,
+  StampState,
+  atLeast
+} from "../esf-core.js";
+import { canOpenReplyDraft, openSuggestionDraft, suggestionOffer } from "../compose/suggest.js";
 import { detectCapabilities } from "../outlook-api/capabilities.js";
 import { currentItem } from "../outlook-api/office.js";
 import { DEFAULTS, loadSettings, saveSettings } from "../settings/settings.js";
@@ -49,27 +57,102 @@ function isReadMode(item) {
   return Boolean(item && typeof item.getAllInternetHeadersAsync === "function");
 }
 
-async function renderReadStatus(item, settings) {
+/**
+ * Verifies the displayed message and paints the result.
+ *
+ * `withFeedbackFloor` is only set for a user-triggered re-check. Verification is one hash and finishes inside a
+ * frame, so without a floor the "Verifying…" state would appear and vanish faster than it can be perceived and the
+ * user would have no way to tell the button did anything. Opening the task pane needs no floor: "Checking ESF" is
+ * what it shows on arrival anyway.
+ *
+ * @param {any} item a read-mode mailbox item
+ * @param {object} settings
+ * @param {boolean} [withFeedbackFloor]
+ */
+async function renderReadStatus(item, settings, withFeedbackFloor = false) {
   const section = el("status");
   section.hidden = false;
+  section.classList.remove("green", "yellow", "red");
   el("statusLight").textContent = "…";
-  el("statusTitle").textContent = "Checking ESF";
+  el("statusTitle").textContent = withFeedbackFloor ? "Verifying…" : "Checking ESF";
   el("statusText").textContent = "";
+  setRefreshing(true);
   try {
-    const result = await verifyCurrentMessage(item, settings);
-    section.classList.remove("green", "yellow", "red");
+    const result = await verifyWithFeedback(verifyCurrentMessage(item, settings), withFeedbackFloor);
     section.classList.add(result.signal);
     el("statusLight").textContent = LIGHTS[result.signal] || "🔴";
     el("statusTitle").textContent = TITLES[result.state] || "ESF";
     el("statusText").textContent = EXPLANATIONS[result.reason] ||
       "The ESF proof could not be evaluated.";
     renderDetails(result);
+    renderSuggestion(item, result);
   } catch (error) {
     el("statusLight").textContent = "⚪";
     el("statusTitle").textContent = "ESF unavailable";
     el("statusText").textContent = "This message's headers could not be read on this Outlook platform.";
     console.error("[esf] verification failed", error);
+  } finally {
+    setRefreshing(false);
   }
+}
+
+/**
+ * Holds a verification result back until the feedback has been on screen long enough to be seen - but only for a
+ * re-check, and only as a floor: work that genuinely takes longer is never slowed down. Kept separate from the
+ * rendering so the timing rule is testable without a webview.
+ *
+ * @template T @param {Promise<T>} work @param {boolean} withFeedbackFloor @returns {Promise<T>}
+ */
+export function verifyWithFeedback(work, withFeedbackFloor) {
+  return withFeedbackFloor ? atLeast(work, MINIMUM_FEEDBACK_MS) : work;
+}
+
+/** Dims the technical detail and locks the buttons while a verification is in flight. */
+function setRefreshing(active) {
+  for (const id of ["detailsToggle", "detailsPanel"]) {
+    el(id).classList.toggle("refreshing", active);
+  }
+  el("recheck").disabled = active;
+  if (active) {
+    // The old verdict's suggestion must not stay clickable: which draft to open depends on the verdict.
+    el("suggest").hidden = true;
+    el("suggestNote").hidden = true;
+  }
+}
+
+/**
+ * Shows - or deliberately withholds - the offer to tell this sender about ESF.
+ *
+ * The offer only appears on a red light for a sender who can plausibly be reached; for a mailing list, an automated
+ * sender or a no-reply address the shared classifier's reason takes the button's place, so the absence is explained
+ * instead of looking like a bug. Where the offer stands, the note underneath warns that replying tells an unknown
+ * sender the address is real - the one thing a missing stamp cannot distinguish.
+ */
+function renderSuggestion(item, result) {
+  const button = el("suggest");
+  const noteEl = el("suggestNote");
+  const { offer, label, note } = suggestionOffer(result);
+  const canReply = canOpenReplyDraft(item);
+  button.hidden = !(offer && canReply);
+  button.disabled = false;
+  button.textContent = label;
+  const text = offer && !canReply ? "This Outlook cannot open a reply from an add-in." : note;
+  noteEl.textContent = text;
+  noteEl.hidden = text === "";
+  button.onclick = () => openDraft(item, result);
+}
+
+/** Opens the draft. Nothing is sent here, and nothing in this file may ever send. */
+async function openDraft(item, result) {
+  const button = el("suggest");
+  const noteEl = el("suggestNote");
+  button.disabled = true;
+  const outcome = await openSuggestionDraft(item, result);
+  if (!outcome.ok) {
+    noteEl.textContent = `Could not open a reply: ${outcome.reason || "unknown"}`;
+    noteEl.hidden = false;
+  }
+  button.disabled = false;
 }
 
 function renderDetails(result) {
@@ -169,6 +252,7 @@ globalThis.Office?.onReady(() => {
   const item = currentItem();
   renderSettings(settings, capabilities);
   if (isReadMode(item)) {
+    el("recheck").onclick = () => renderReadStatus(item, settings, true);
     renderReadStatus(item, settings);
   } else if (item) {
     renderComposeInfo(settings, capabilities);

@@ -4,14 +4,18 @@
  * The text is imported rather than copied, so the two clients cannot drift into advertising ESF differently. It moves
  * to packages/ together with the protocol core (roadmap stage 2).
  *
+ * The text exists in German and English, chosen by Outlook's interface language, and comes from the same table the
+ * Thunderbird client reads.
+ *
  * Office.js has an API made exactly for this: `body.appendOnSendAsync` adds text at send time without touching the
  * body the user is still editing. It needs Mailbox requirement set 1.13, so a client that cannot do it simply sends
  * without a footer - the stamp is the point, the footer is the advertisement.
  */
 
 // eslint-disable-next-line import/no-relative-parent-imports -- shared product text, see the note above
-import { FOOTER_HTML, FOOTER_PLAIN } from "../../../thunderbird/src/utils/footer.js";
+import { footerFor } from "../../../thunderbird/src/utils/footer.js";
 import { isMailboxSetSupported } from "../outlook-api/capabilities.js";
+import { clientLocale } from "../outlook-api/locale.js";
 
 /** Requirement set that introduced body.appendOnSendAsync. */
 const APPEND_ON_SEND_SET = "1.13";
@@ -36,7 +40,9 @@ export async function appendFooter(item) {
   }
 
   const coercionType = await bodyType(item);
-  const text = coercionType === "html" ? FOOTER_HTML : FOOTER_PLAIN;
+  // Outlook's interface language, matching the sender suggestion: a German message should not carry an English line.
+  const footer = footerFor(clientLocale());
+  const text = coercionType === "html" ? footer.html : footer.plain;
   const options = globalThis.Office?.CoercionType
     ? { coercionType: coercionType === "html" ? Office.CoercionType.Html : Office.CoercionType.Text }
     : {};

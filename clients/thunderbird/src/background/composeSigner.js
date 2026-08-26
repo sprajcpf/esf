@@ -85,14 +85,17 @@ export class ComposeSigner {
    * @param {(tabId: number, state: object) => void} deps.onStateChange
    * @param {(tabId: number) => Promise<void>} deps.askUser
    * @param {(details: object) => Promise<string>} [deps.resolveFrom] resolves the sending mailbox for sid
+   * @param {() => string} [deps.getLocale] the mail client's language, for the footer text
    */
-  constructor({ solver, getSettings, onStateChange, askUser, resolveFrom }) {
+  constructor({ solver, getSettings, onStateChange, askUser, resolveFrom, getLocale }) {
     this.solver = solver;
     this.getSettings = getSettings;
     this.onStateChange = onStateChange;
     this.askUser = askUser;
     // ComposeDetails.from may be an address book node rather than a string, so the caller resolves the identity.
     this.resolveFrom = resolveFrom || (async details => (typeof details.from === "string" ? details.from : ""));
+    // Injected rather than read here so the send path stays unit testable without a browser object.
+    this.getLocale = getLocale || (() => globalThis.browser?.i18n?.getUILanguage?.() ?? "en");
     /** @type {Map<number, object>} tabId -> live state for the compose popup */
     this.states = new Map();
     /** @type {Map<number, AbortController>} */
@@ -347,7 +350,7 @@ export class ComposeSigner {
     const header = { name: HEADER_NAME, value: serializeStampList(stamps) };
     // The footer goes only on a message that actually carries a stamp: it must never advertise work that was not
     // done. It is also only ever added once, however often a draft is saved and re-sent.
-    const footer = settings.appendFooter ? buildFooterPatch(details) : {};
+    const footer = settings.appendFooter ? buildFooterPatch(details, this.getLocale()) : {};
     return { details: { customHeaders: [...keptHeaders, header], ...footer } };
   }
 

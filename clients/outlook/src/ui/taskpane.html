@@ -13,6 +13,12 @@
       <div id="statusLight" class="light">…</div>
       <h1 id="statusTitle">ESF</h1>
       <p id="statusText"></p>
+      <!-- Suggestion first and primary: on a red light it is the only thing the user can actually do about it. -->
+      <div class="actions">
+        <button id="suggest" class="primary" hidden>Tell sender about ESF</button>
+        <button id="recheck">Verify again</button>
+      </div>
+      <p id="suggestNote" class="hint" hidden></p>
       <button id="detailsToggle" class="linklike" hidden>Details</button>
       <pre id="detailsPanel" class="details" hidden></pre>
     </section>

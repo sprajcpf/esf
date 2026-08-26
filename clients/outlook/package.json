@@ -1,6 +1,6 @@
 {
   "name": "esf-outlook",
-  "version": "0.3.0",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "ESF \u2014 End-Spam-Forever: Proof-of-Work Outlook add-in (Office.js)",

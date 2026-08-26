@@ -15,6 +15,7 @@ const suggestNote = document.getElementById("suggestNote");
 let current = null;
 
 import { MINIMUM_FEEDBACK_MS, atLeast } from "../utils/timing.js";
+import { SUGGESTION_LABELS, SUGGESTION_NOTE } from "../ui/strings.js";
 
 const HEADLINE = {
   green: "Proof of work verified",
@@ -126,10 +127,9 @@ function renderSuggestion(result) {
   const offer = red && sender.replyable === true;
   suggestButton.classList.toggle("hidden", !offer);
   suggestButton.disabled = false;
-  suggestButton.textContent = result.state === "invalid" ? "Tell sender it failed" : "Tell sender about ESF";
+  suggestButton.textContent = result.state === "invalid" ? SUGGESTION_LABELS.invalid : SUGGESTION_LABELS.missing;
   const note = offer
-    ? "Opens a reply you can read and edit; nothing is sent for you. Only worth it for senders you know — a reply " +
-      "tells a stranger the address is real."
+    ? SUGGESTION_NOTE
     : red && sender.reason
       ? sender.reason
       : "";

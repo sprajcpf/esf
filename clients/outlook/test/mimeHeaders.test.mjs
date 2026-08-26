@@ -68,3 +68,20 @@ test("extractEsfHeaders survives a huge hostile block", () => {
   // The stamp sits behind the line/size bounds; the point is bounded work, not finding it.
   assert.ok(Array.isArray(stampValues));
 });
+
+test("extractEsfHeaders returns every field as a dictionary, for the shared sender classifier", () => {
+  // The classifier decides on fields this module has no business listing, so it gets all of them, lower-cased.
+  const block = "List-Id: <news.example.org>\r\nPrecedence: bulk\r\nFrom: news@example.org\r\nReceived: from a; x";
+  const { headers } = extractEsfHeaders(block);
+  assert.deepEqual(headers["list-id"], ["<news.example.org>"]);
+  assert.deepEqual(headers.precedence, ["bulk"]);
+  assert.equal(headers["LIST-ID"], undefined, "names are normalised, so lookups need no guessing");
+});
+
+test("extractEsfHeaders keeps repeated fields but bounds them, because the block arrived by mail", () => {
+  const many = Array.from({ length: 30 }, (_, index) => `Received: hop ${index}`).join("\r\n");
+  const long = `X-Pad: ${"a".repeat(5000)}`;
+  const { headers } = extractEsfHeaders(`${many}\r\n${long}`);
+  assert.equal(headers.received.length, 10);
+  assert.equal(headers["x-pad"][0].length, 1000);
+});

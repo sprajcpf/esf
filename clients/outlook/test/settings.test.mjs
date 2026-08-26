@@ -16,6 +16,18 @@ test("normalizeSettings falls back to defaults on garbage", () => {
   assert.deepEqual(normalized.aliasMailboxes, []);
 });
 
+test("automatic difficulty is the default, and the time budget is clamped to something sendable", () => {
+  assert.equal(DEFAULTS.difficultyMode, "auto");
+  assert.equal(DEFAULTS.autoTargetSeconds, 2);
+  assert.equal(normalizeSettings({}).difficultyMode, "auto");
+  assert.equal(normalizeSettings({ difficultyMode: "whatever" }).difficultyMode, "auto");
+  assert.equal(normalizeSettings({ difficultyMode: "fixed" }).difficultyMode, "fixed");
+  assert.equal(normalizeSettings({ autoTargetSeconds: 0 }).autoTargetSeconds, 1);
+  assert.equal(normalizeSettings({ autoTargetSeconds: 999 }).autoTargetSeconds, 60);
+  assert.equal(normalizeSettings({ autoTargetSeconds: "soon" }).autoTargetSeconds, DEFAULTS.autoTargetSeconds);
+  assert.equal(normalizeSettings({ autoTargetSeconds: 5 }).autoTargetSeconds, 5);
+});
+
 test("stamps never expire by default; 0 is preserved, not clamped up", () => {
   assert.equal(normalizeSettings({}).maxStampAgeDays, 0);
   assert.equal(normalizeSettings({ maxStampAgeDays: 0 }).maxStampAgeDays, 0);
