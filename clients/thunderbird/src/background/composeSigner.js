@@ -22,6 +22,7 @@ import {
   senderToken,
   unixSeconds
 } from "../protocol/stamp.js";
+import { buildFooterPatch } from "../utils/footer.js";
 import { resolveWorkerCount } from "../utils/settings.js";
 import { createLogger } from "../utils/log.js";
 
@@ -284,7 +285,10 @@ export class ComposeSigner {
     }
     // Thunderbird keeps only one custom header per name, so all stamps of a message travel in one field value.
     const header = { name: HEADER_NAME, value: serializeStampList(stamps) };
-    return { details: { customHeaders: [...keptHeaders, header] } };
+    // The footer goes only on a message that actually carries a stamp: it must never advertise work that was not
+    // done. It is also only ever added once, however often a draft is saved and re-sent.
+    const footer = settings.appendFooter ? buildFooterPatch(details) : {};
+    return { details: { customHeaders: [...keptHeaders, header], ...footer } };
   }
 
   /**

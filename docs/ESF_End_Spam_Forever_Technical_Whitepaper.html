@@ -371,14 +371,15 @@ valid iff leading_zero_bits(h) &gt;= d</code></pre>
 <p>Implementation note: current client APIs (Thunderbird customHeaders, Outlook internetHeaders) keep at most one header value per field name, so the reference clients serialize all stamps of a message as a comma-separated list inside a single ESF-Stamp field. Receivers MUST accept both forms - one stamp per field and a stamp list within one field - subject to the anti-DoS bounds of section 6.7 (see Appendix D).</p>
 <h2 id="7-difficulty-and-economic-model">7. Difficulty and economic model</h2>
 <h3 id="7-1-difficulty-is-policy-not-a-universal-constant">7.1 Difficulty is policy, not a universal constant</h3>
-<p>A fixed global number such as 22 bits is useful for a prototype but is not suitable as a permanent Internet-wide policy. Hardware capability, energy constraints and abuse economics change over time. ESF therefore separates protocol syntax from receiver policy.</p>
+<p>A fixed global number is useful for a prototype but is not suitable as a permanent Internet-wide policy. Hardware capability, energy constraints and abuse economics change over time. ESF therefore separates protocol syntax from receiver policy.</p>
+<p>For the start of deployment the reference clients default to <strong>20 bits</strong>, and that number is chosen against the send flow rather than in the abstract: it takes a few seconds on an ordinary machine, which a client can absorb by computing past its quiet phase while showing progress, and it costs a bulk sender four times what 18 bits does. It is a starting value to be revised from deployment evidence (section 14), not a recommendation for all time - and a receiver's minimum for a green result is a separate decision from a sender's baseline.</p>
 <div class="table-scroll"><table>
 <thead><tr><th>Difficulty</th><th>Expected SHA-256 trials</th><th>Relative work</th></tr></thead><tbody>
-<tr><td>18</td><td>262,144</td><td>1/16 of d=22</td></tr>
-<tr><td>20</td><td>1,048,576</td><td>1/4</td></tr>
-<tr><td>22</td><td>4,194,304</td><td>baseline example</td></tr>
-<tr><td>24</td><td>16,777,216</td><td>4x</td></tr>
-<tr><td>26</td><td>67,108,864</td><td>16x</td></tr>
+<tr><td>18</td><td>262,144</td><td>1/4 of the starting default</td></tr>
+<tr><td>20</td><td>1,048,576</td><td>starting default of the reference clients</td></tr>
+<tr><td>22</td><td>4,194,304</td><td>4x the starting default</td></tr>
+<tr><td>24</td><td>16,777,216</td><td>16x</td></tr>
+<tr><td>26</td><td>67,108,864</td><td>64x</td></tr>
 </tbody></table></div>
 <p>These values describe algorithmic work, not wall-clock time. Wall-clock time depends heavily on implementation, processor, GPU/ASIC availability, thermal limits and parallelism. ESF implementations should calibrate against measured local performance rather than promise a universal number of milliseconds.</p>
 <h3 id="7-2-initial-profiles-sha-256-and-argon2id">7.2 Initial profiles: SHA-256 and Argon2id</h3>
@@ -657,9 +658,12 @@ profile-param = token &quot;=&quot; token
 <p>canonical work input: the bundled pure-JavaScript SHA-256 reaches ~198,000 H/s and per-call native hashing through the</p>
 <p>platform crypto API ~280,000 H/s, while WebCrypto's per-call async digest collapses to ~13,000 H/s - which is why the</p>
 <p>nonce search uses the synchronous implementation and reserves WebCrypto for one-shot token derivation. Practical</p>
-<p>consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient; a one-second</p>
-<p>per-recipient budget therefore fails d=18 about half the time (the success probability within budget t is</p>
-<p>1 - e^(-t * rate / 2^d)), so compute budgets and baseline difficulty MUST be calibrated together. The GPU, ASIC and</p>
+<p>consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient, and the success</p>
+<p>probability within a budget t is 1 - e^(-t * rate / 2^d). A single one-second budget therefore fails d=18 about half</p>
+<p>the time, which is why the reference clients do not treat the budget as a deadline: they compute quietly for a</p>
+<p>second, keep computing visibly afterwards, and only ask the user after a patience threshold. That pairing is what</p>
+<p>makes a d=20 default work in practice - two shards reach it in ~3.5 s on average, four in ~1.7 s - and it is why</p>
+<p>compute budgets, shard counts and baseline difficulty MUST be calibrated together rather than chosen separately. The GPU, ASIC and</p>
 <p>Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values</p>
 <p>across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.</p>
 <h2 id="references">References</h2>

@@ -34,12 +34,16 @@ export const KNOWN_ALGORITHMS = new Set([ALGORITHM_SHA256, ALGORITHM_ARGON2ID]);
 /** Difficulty offered in the options UI. 0 disables generation. */
 export const SELECTABLE_DIFFICULTY = [0, 18, 20, 22, 24, 26];
 /**
- * Default difficulty. Whitepaper 7.1 is explicit that a fixed global number is a prototype convenience, not policy,
- * so this is chosen to fit the default one-second compute budget: measured inside Thunderbird at roughly 300k
- * hashes/s across two workers, 18 bits completes within a second about two thirds of the time, while 22 bits would
- * only make it in about one send in fourteen - which would leave almost every message unstamped.
+ * Default difficulty for the start of deployment.
+ *
+ * Whitepaper 7.1 is explicit that a fixed global number is a prototype convenience, not policy. 20 bits is chosen
+ * against the two-stage send flow rather than against the quiet phase alone: at roughly 300k hashes/s across two
+ * worker shards it takes about 3.5 seconds on average (about 1.7 with four shards), so most sends run a little past
+ * the one-second quiet phase and finish while the compose button shows progress, and the patience threshold - 15
+ * seconds by default - is reached in well under one send in a hundred. It costs a bulk sender four times what 18
+ * bits does.
  */
-export const DEFAULT_DIFFICULTY = 18;
+export const DEFAULT_DIFFICULTY = 20;
 
 /**
  * Verification bounds. Difficulty is declared by an untrusted sender, so the verifier applies its own bounds and

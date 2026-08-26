@@ -13,6 +13,16 @@ verifies stamps on incoming mail, shown as a simple traffic light:
 email is safe". Technical detail (algorithm, difficulty, timestamps) lives behind *Details*; normal users never need
 it.
 
+## Download
+
+**Download `esf-outlook-<version>.zip` from the [latest release](https://github.com/sprajcpf/esf/releases/latest).** An Office add-in is a manifest plus
+static files served over HTTPS, so the archive contains the manifest, the files to serve and an `INSTALL.md` covering
+both routes: sideloading a single mailbox, and admin deployment via Integrated Apps — the latter is the only one that
+applies the send hook automatically.
+
+To build it yourself: `npm install && npm run build && npm run package -- --host https://your-host.example/esf`.
+
+
 ## Architecture
 
 The protocol implementation is shared with the Thunderbird client and is free of any client API usage:

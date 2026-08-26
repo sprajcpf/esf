@@ -41,6 +41,11 @@ export const DEFAULTS = Object.freeze({
    * treated as malicious (whitepaper 10.1, 11).
    */
   junkOnRed: false,
+  /**
+   * Append a one-line footer naming ESF and linking the project, on messages that carry a stamp. This is how a
+   * recipient finds out what made the message verifiable, which is the only spreading mechanism ESF has.
+   */
+  appendFooter: true,
   /** Reserved for the trust-aware policy in src/protocol/policy.js. */
   trustAwareDifficulty: false,
   /** Bcc handling: "omit" (whitepaper fallback) or "token" (include the salted rid). */
@@ -95,6 +100,7 @@ export function normalizeSettings(raw) {
     maxWorkers: clamp(Number(input.maxWorkers), 0, 32, DEFAULTS.maxWorkers),
     showBadge: input.showBadge !== false,
     junkOnRed: input.junkOnRed === true,
+    appendFooter: input.appendFooter !== false,
     trustAwareDifficulty: input.trustAwareDifficulty === true,
     debugLogging: input.debugLogging === true,
     bccMode: input.bccMode === "token" ? "token" : "omit",

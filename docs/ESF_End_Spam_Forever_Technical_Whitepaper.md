@@ -267,15 +267,17 @@ The future ESF-SMTP profile solves this cleanly because the actual recipient is 
 Implementation note: current client APIs (Thunderbird customHeaders, Outlook internetHeaders) keep at most one header value per field name, so the reference clients serialize all stamps of a message as a comma-separated list inside a single ESF-Stamp field. Receivers MUST accept both forms - one stamp per field and a stamp list within one field - subject to the anti-DoS bounds of section 6.7 (see Appendix D).
 ## 7. Difficulty and economic model
 ### 7.1 Difficulty is policy, not a universal constant
-A fixed global number such as 22 bits is useful for a prototype but is not suitable as a permanent Internet-wide policy. Hardware capability, energy constraints and abuse economics change over time. ESF therefore separates protocol syntax from receiver policy.
+A fixed global number is useful for a prototype but is not suitable as a permanent Internet-wide policy. Hardware capability, energy constraints and abuse economics change over time. ESF therefore separates protocol syntax from receiver policy.
+
+For the start of deployment the reference clients default to **20 bits**, and that number is chosen against the send flow rather than in the abstract: it takes a few seconds on an ordinary machine, which a client can absorb by computing past its quiet phase while showing progress, and it costs a bulk sender four times what 18 bits does. It is a starting value to be revised from deployment evidence (section 14), not a recommendation for all time - and a receiver's minimum for a green result is a separate decision from a sender's baseline.
 
 | Difficulty | Expected SHA-256 trials | Relative work |
 | --- | --- | --- |
-| 18 | 262,144 | 1/16 of d=22 |
-| 20 | 1,048,576 | 1/4 |
-| 22 | 4,194,304 | baseline example |
-| 24 | 16,777,216 | 4x |
-| 26 | 67,108,864 | 16x |
+| 18 | 262,144 | 1/4 of the starting default |
+| 20 | 1,048,576 | starting default of the reference clients |
+| 22 | 4,194,304 | 4x the starting default |
+| 24 | 16,777,216 | 16x |
+| 26 | 67,108,864 | 64x |
 
 These values describe algorithmic work, not wall-clock time. Wall-clock time depends heavily on implementation, processor, GPU/ASIC availability, thermal limits and parallelism. ESF implementations should calibrate against measured local performance rather than promise a universal number of milliseconds.
 ### 7.2 Initial profiles: SHA-256 and Argon2id
@@ -627,9 +629,12 @@ Measured on one mid-range Windows 11 desktop (Node.js 22, single thread, August 
 canonical work input: the bundled pure-JavaScript SHA-256 reaches ~198,000 H/s and per-call native hashing through the
 platform crypto API ~280,000 H/s, while WebCrypto's per-call async digest collapses to ~13,000 H/s - which is why the
 nonce search uses the synchronous implementation and reserves WebCrypto for one-shot token derivation. Practical
-consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient; a one-second
-per-recipient budget therefore fails d=18 about half the time (the success probability within budget t is
-1 - e^(-t * rate / 2^d)), so compute budgets and baseline difficulty MUST be calibrated together. The GPU, ASIC and
+consequence for defaults: at ~0.2 MH/s per thread, d=18 costs ~1.3 s and d=20 ~5 s per recipient, and the success
+probability within a budget t is 1 - e^(-t * rate / 2^d). A single one-second budget therefore fails d=18 about half
+the time, which is why the reference clients do not treat the budget as a deadline: they compute quietly for a
+second, keep computing visibly afterwards, and only ask the user after a patience threshold. That pairing is what
+makes a d=20 default work in practice - two shards reach it in ~3.5 s on average, four in ~1.7 s - and it is why
+compute budgets, shard counts and baseline difficulty MUST be calibrated together rather than chosen separately. The GPU, ASIC and
 Argon2id numbers in section 7.4 are estimates from public benchmarks, not measurements; producing measured values
 across desktop, mobile, server and GPU hardware is the Phase 0 deliverable of section 14.
 

@@ -14,6 +14,7 @@ import { STANDARD_HEADER_NAME } from "../esf-core.js";
 import { detectCapabilities } from "../outlook-api/capabilities.js";
 import { currentItem, getFromMailbox, getRecipientMailboxes, notify, setInternetHeaders } from "../outlook-api/office.js";
 import { loadSettings } from "../settings/settings.js";
+import { appendFooter } from "../compose/footer.js";
 import { mintStamps } from "../compose/sendSigner.js";
 
 const NOTICE_KEY = "esfSendNotice";
@@ -74,6 +75,10 @@ async function handleMessageSend(event) {
         throw new Error("internetHeaders.setAsync failed");
       }
       console.log(`[esf] ${outcome.stampCount} stamp(s), ${outcome.hashes} hashes, ${outcome.elapsedMs} ms`);
+      // Only now, with a stamp actually written, may the footer advertise one.
+      if (settings.appendFooter) {
+        await appendFooter(item);
+      }
       allow(event);
       return;
     }

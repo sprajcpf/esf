@@ -46,6 +46,11 @@ export const DEFAULTS = Object.freeze({
    * the wrong default. "send-without" keeps mail flowing with an informational notice instead.
    */
   onSendFailure: "block",
+  /**
+   * Append a one-line footer naming ESF and linking the project, on messages that carry a stamp. Mirrors the
+   * Thunderbird default; needs Mailbox requirement set 1.13, and is simply skipped where that is unavailable.
+   */
+  appendFooter: true,
   /** Bcc handling: "omit" (whitepaper fallback) or "token" (include the salted rid). See composeSigner in TB. */
   bccMode: "omit",
   /**

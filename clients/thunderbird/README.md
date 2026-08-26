@@ -81,7 +81,12 @@ legacy sender from a forged stamp.
 
 ## Installation
 
+**The quickest way: download the `.xpi` from the [latest release](https://github.com/sprajcpf/esf/releases/latest).** Then Add-ons Manager → gear icon →
+*Install Add-on From File*. Unsigned add-ons need `xpinstall.signatures.required = false` in the Config Editor.
+
 Requires **Thunderbird 128 or newer** (Manifest V3). Verified on Thunderbird 153.
+
+To load it from source instead:
 
 1. Tools → Developer Tools → **Debug Add-ons**
 2. **Load Temporary Add-on…**

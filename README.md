@@ -10,6 +10,20 @@ proposal, and a technical whitepaper.
 > scarce-resource signal — not sender authentication, not a reputation score, and not a verdict on content. ESF
 > complements SPF, DKIM and DMARC rather than replacing them.
 
+## Download
+
+Both clients are published as installable packages with every release:
+
+| | Package | Install |
+|---|---|---|
+| **Thunderbird** | `esf-thunderbird-<version>.xpi` | Add-ons Manager → gear → *Install Add-on From File*. Thunderbird 128+; verified on 153. Unsigned, so `xpinstall.signatures.required = false` is needed. |
+| **Outlook** | `esf-outlook-<version>.zip` | Serve `web/` over HTTPS, set that URL in `manifest.xml`, install the manifest. `INSTALL.md` in the archive covers sideloading and admin deployment. Requirement set 1.12+; no Outlook mobile. |
+
+### → [Latest release](https://github.com/sprajcpf/esf/releases/latest)
+
+Prototype quality: a stamp proves computing time was spent for a recipient, and nothing else. Read
+[SECURITY.md](SECURITY.md) before relying on it.
+
 ## Documentation
 
 | Document | |

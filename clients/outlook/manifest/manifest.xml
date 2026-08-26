@@ -14,7 +14,7 @@
            xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/1.0"
            xsi:type="MailApp">
   <Id>7e0d8a3c-4f5b-4b9a-9c2e-1a6f2b8d4e71</Id>
-  <Version>0.2.0</Version>
+  <Version>0.3.0</Version>
   <ProviderName>ESF Project</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
   <DisplayName DefaultValue="ESF - End Spam Forever"/>

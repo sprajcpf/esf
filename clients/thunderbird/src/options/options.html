@@ -34,8 +34,8 @@
         <span>Baseline difficulty</span>
         <select name="outgoingDifficulty">
           <option value="0">Disabled</option>
-          <option value="18">18 bits (default)</option>
-          <option value="20">20 bits</option>
+          <option value="18">18 bits</option>
+          <option value="20">20 bits (default)</option>
           <option value="22">22 bits</option>
           <option value="24">24 bits</option>
           <option value="26">26 bits</option>
@@ -57,9 +57,9 @@
         <span class="inline"><input type="number" name="askAfterSeconds" min="2" max="600" step="1"> seconds</span>
       </label>
       <p class="hint indent">
-        The emergency exit, reached only on a slow machine or a high difficulty. Work is exponential: at 18 bits a
-        second is usually enough, 22 bits needs about fifteen. <em>Measure my hash rate</em> below shows what your
-        machine actually manages.
+        The emergency exit, reached only on a slow machine or a high difficulty. Work is exponential: the default 20
+        bits takes a few seconds, while 22 bits needs about fifteen and 24 bits close to a minute. <em>Measure my
+        hash rate</em> below shows what your machine actually manages.
       </p>
 
       <label>
@@ -90,6 +90,16 @@
           <small>0 = automatic: min(4, cores − 2)</small>
         </span>
       </label>
+
+      <label class="check">
+        <input type="checkbox" name="appendFooter">
+        <span>Add a one-line footer to stamped messages</span>
+      </label>
+      <p class="hint indent">
+        This is the only way ESF spreads: a recipient sees what made the message verifiable and where to get it. It
+        is added only to messages that actually carry a stamp, and only once. The line reads:
+        <span class="mono" id="footerPreview"></span>
+      </p>
 
       <label class="check">
         <input type="checkbox" name="trustAwareDifficulty">

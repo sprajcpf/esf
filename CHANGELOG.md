@@ -3,6 +3,27 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.3.0
+
+### Added
+
+- **A one-line footer on stamped messages**, naming ESF and linking the project. This is the only mechanism by which
+  ESF spreads: a recipient of a stamped message finds out what made it verifiable and where to get the same thing.
+  Three rules keep it honest — it is added **only to messages that actually carry a stamp**, so it never advertises
+  work that was not done; it is added **at most once**, however often a draft is saved and re-sent; and it claims
+  work, never identity or safety. On by default, one checkbox to turn off, and the options page shows the exact line.
+  Thunderbird appends it through the send hook; Outlook uses `body.appendOnSendAsync` where requirement set 1.13 is
+  available and silently skips it where it is not.
+
+### Changed
+
+- **Default difficulty is 20 bits** for the start of deployment, up from 18. Chosen against the two-stage send flow
+  rather than against the quiet phase alone: about 3.5 s on average with two worker shards, 1.7 s with four, so most
+  sends finish while the compose button shows progress and the patience threshold is reached in well under one send
+  in a hundred. It costs a bulk sender four times what 18 bits does.
+- Whitepaper 7.1 now names the shipped starting baseline and why, the difficulty table is expressed relative to it,
+  and appendix D.10 records that budgets, shard counts and baseline difficulty have to be calibrated together.
+
 ## v0.2.0
 
 First release with installable packages for both clients. Stamps minted by either client verify in the other.

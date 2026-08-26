@@ -2,6 +2,7 @@
 
 import { DEFAULTS, loadSettings, resolveWorkerCount, saveSettings } from "../utils/settings.js";
 import { buildWorkBase, generateSalt, searchNonce, unixSeconds } from "../protocol/stamp.js";
+import { footerPreview } from "../utils/footer.js";
 
 const form = document.getElementById("form");
 const savedEl = document.getElementById("saved");
@@ -105,5 +106,7 @@ function formatSeconds(seconds) {
   }
   return `${(seconds / 60).toFixed(1)} min`;
 }
+
+document.getElementById("footerPreview").textContent = footerPreview();
 
 loadSettings().then(applyToForm);

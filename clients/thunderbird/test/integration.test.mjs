@@ -91,7 +91,7 @@ test("the traffic light follows the whitepaper mapping", () => {
 
 test("the defaults compute quietly for a second, then keep going rather than dropping the stamp", () => {
   assert.equal(DEFAULTS.maxComputeSeconds, 1, "a send must not visibly stall for seconds");
-  assert.equal(DEFAULTS.outgoingDifficulty, 18, "the baseline has to be reachable inside the quiet phase");
+  assert.equal(DEFAULTS.outgoingDifficulty, 20, "the starting baseline");
   assert.equal(DEFAULTS.onTimeout, "ask", "with ESF enabled a message is meant to carry a stamp");
   assert.ok(DEFAULTS.askAfterSeconds > DEFAULTS.maxComputeSeconds,
     "asking must come well after the quiet phase, not instead of it");
