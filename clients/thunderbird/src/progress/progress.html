@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>ESF</title>
+  <link rel="stylesheet" href="../ui/common.css">
+  <link rel="stylesheet" href="progress.css">
+</head>
+<body class="progress">
+  <div class="headline">
+    <span class="spinner" id="spinner" aria-hidden="true"></span>
+    <span id="headline">Creating proof of work</span>
+  </div>
+
+  <p class="summary" id="summary"></p>
+  <progress id="bar" aria-label="working"></progress>
+
+  <div class="actions" id="actions" hidden>
+    <button class="primary" data-decision="continue">Keep going</button>
+    <button data-decision="send-without">Send without</button>
+    <button data-decision="cancel">Cancel send</button>
+  </div>
+
+  <details id="disclosure">
+    <summary>Details</summary>
+    <dl class="details" id="details"></dl>
+    <p class="hint small" id="mining"></p>
+    <p class="hint small" id="memoryless"></p>
+  </details>
+
+  <script type="module" src="progress.js"></script>
+</body>
+</html>

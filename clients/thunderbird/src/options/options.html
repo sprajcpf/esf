@@ -92,6 +92,16 @@
       </label>
 
       <label class="check">
+        <input type="checkbox" name="showProgress">
+        <span>Show a small window while a send is still computing</span>
+      </label>
+      <p class="hint indent">
+        Appears only when a send runs past the quiet phase above, says roughly how long this usually takes on your
+        machine, and closes itself. It is also where the question appears if it really takes too long — with this off
+        there is nowhere to ask, so the fallback above applies instead.
+      </p>
+
+      <label class="check">
         <input type="checkbox" name="appendFooter">
         <span>Add a one-line footer to stamped messages</span>
       </label>

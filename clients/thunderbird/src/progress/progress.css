@@ -1,0 +1,52 @@
+body.progress {
+  min-width: 0;
+  padding: 14px 16px 16px;
+}
+
+.headline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+/* An indeterminate spinner, deliberately: there is no percentage to show. */
+.spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 2px solid var(--esf-border);
+  border-top-color: var(--esf-accent);
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+.spinner.done { animation: none; border-color: var(--esf-valid); border-top-color: var(--esf-valid); }
+.spinner.warn { animation: none; border-color: var(--esf-missing); border-top-color: var(--esf-missing); }
+.spinner.stop { animation: none; border-color: var(--esf-invalid); border-top-color: var(--esf-invalid); }
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner { animation: none; }
+}
+
+.summary {
+  margin: 0 0 10px;
+  color: var(--esf-muted);
+  line-height: 1.45;
+}
+
+progress {
+  width: 100%;
+  height: 4px;
+  margin-bottom: 12px;
+}
+
+body.progress .actions { margin-bottom: 10px; }
+
+details summary { font-size: 12px; }
+
+.hint.small { font-size: 11px; line-height: 1.45; }

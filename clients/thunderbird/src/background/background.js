@@ -44,16 +44,65 @@ const solver = new PowSolver();
 
 const verificationService = new VerificationService({ getSettings });
 
+/**
+ * Progress windows, one per compose tab.
+ *
+ * A small window rather than the toolbar popup: composeAction.openPopup() needs the compose window to cooperate and
+ * silently does nothing in some situations, and a wait the user did not expect is exactly when the add-on must not
+ * be silent. The same window carries the decision buttons once patience runs out, so there is one surface, not two.
+ */
+const progressWindows = new Map();
+
+async function openProgressWindow(tabId) {
+  if (progressWindows.has(tabId)) {
+    return;
+  }
+  // Reserve the slot before awaiting, so two rapid state changes cannot open two windows.
+  progressWindows.set(tabId, null);
+  try {
+    const created = await browser.windows.create({
+      url: `/src/progress/progress.html?tabId=${tabId}`,
+      type: "popup",
+      width: 420,
+      height: 260,
+      allowScriptsToClose: true
+    });
+    progressWindows.set(tabId, created.id);
+  } catch (error) {
+    progressWindows.delete(tabId);
+    log.warn("cannot open the progress window", error);
+  }
+}
+
+async function closeProgressWindow(tabId, delayMs = 0) {
+  const windowId = progressWindows.get(tabId);
+  progressWindows.delete(tabId);
+  if (windowId === null || windowId === undefined) {
+    return;
+  }
+  if (delayMs > 0) {
+    // Leave the outcome on screen briefly: a window that vanishes the instant it appears reads as a glitch.
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  try {
+    await browser.windows.remove(windowId);
+  } catch (error) {
+    log.debug("progress window already gone", error);
+  }
+}
+
 const composeSigner = new ComposeSigner({
   solver,
   getSettings,
   onStateChange: (tabId, state) => {
     updateComposeButton(tabId, state).catch(error => log.warn("compose button update failed", error));
-    // Best effort: only delivered while a popup is listening.
+    // Best effort: only delivered while a window or popup is listening.
     browser.runtime.sendMessage({ type: "esf:composeState", state }).catch(() => {});
+    handleProgressWindow(tabId, state).catch(error => log.warn("progress window update failed", error));
   },
   askUser: async tabId => {
-    await browser.composeAction.openPopup({ tabId });
+    // The question is asked in the progress window, which is already open by the time patience runs out.
+    await openProgressWindow(tabId);
   },
   resolveFrom: async details => {
     if (typeof details.from === "string" && details.from) {
@@ -72,6 +121,30 @@ const composeSigner = new ComposeSigner({
 /* ------------------------------------------------------------------ outgoing */
 
 browser.compose.onBeforeSend.addListener((tab, details) => composeSigner.handleBeforeSend(tab, details));
+
+/**
+ * Shows the window once the quiet phase is over, and takes it away when there is nothing left to say.
+ *
+ * A send that finishes inside the quiet second never opens a window at all, which is the common case and the whole
+ * reason the quiet phase exists.
+ */
+async function handleProgressWindow(tabId, state) {
+  const settings = await getSettings();
+  if (!settings.showProgress) {
+    return;
+  }
+  if (state.phase === ComposePhase.COMPUTING && state.overBudget) {
+    await openProgressWindow(tabId);
+    return;
+  }
+  if (state.phase === ComposePhase.ASKING) {
+    await openProgressWindow(tabId);
+    return;
+  }
+  if ([ComposePhase.DONE, ComposePhase.SKIPPED, ComposePhase.CANCELLED].includes(state.phase)) {
+    await closeProgressWindow(tabId, 1200);
+  }
+}
 
 async function updateComposeButton(tabId, state) {
   const label = {

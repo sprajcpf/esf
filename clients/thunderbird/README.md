@@ -18,6 +18,10 @@ This is the *Phase 1 client prototype* of the ESF deployment roadmap: see
   a single `X-ESF-Stamp` header field. With ESF enabled a message is meant to *carry* a stamp, so the search runs in
   two stages: quiet for the first second, then visibly (still running, never abandoned), and only after the patience
   threshold does it ask whether to keep going, send without, or cancel.
+- **While it computes:** a small window appears once a send runs past the quiet phase, says roughly how long this
+  usually takes on this machine, and closes itself. It has no percentage and no filling bar on purpose — the search
+  is memoryless, so work already done does not bring the result closer, and a bar would promise a completion nobody
+  can predict. The numbers live behind *Details*.
 - **Incoming:** verifies every stamp of a displayed message against your own mailboxes and shows the traffic light
   on the message-display button, with details behind a disclosure.
 - **Optional:** feed a red result into Thunderbird's junk flag (off by default).

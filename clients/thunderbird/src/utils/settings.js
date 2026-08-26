@@ -34,6 +34,12 @@ export const DEFAULTS = Object.freeze({
   maxStampAgeDays: DEFAULT_MAX_AGE_DAYS,
   /** Below this difficulty a valid stamp counts as weak/yellow rather than strong/green. */
   minIncomingDifficulty: 18,
+  /**
+   * Show a small window while a send is computing longer than the quiet phase. Off means the toolbar button is the
+   * only indication - and that the "taking too long" question has nowhere to appear, so the configured fallback
+   * applies instead.
+   */
+  showProgress: true,
   /** Show the traffic light on displayed messages. */
   showBadge: true,
   /**
@@ -98,6 +104,7 @@ export function normalizeSettings(raw) {
     maxStampAgeDays: clamp(Number(input.maxStampAgeDays), 0, 3650, DEFAULTS.maxStampAgeDays),
     minIncomingDifficulty: clamp(Number(input.minIncomingDifficulty), 1, 30, DEFAULTS.minIncomingDifficulty),
     maxWorkers: clamp(Number(input.maxWorkers), 0, 32, DEFAULTS.maxWorkers),
+    showProgress: input.showProgress !== false,
     showBadge: input.showBadge !== false,
     junkOnRed: input.junkOnRed === true,
     appendFooter: input.appendFooter !== false,
