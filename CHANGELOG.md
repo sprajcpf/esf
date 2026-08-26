@@ -3,6 +3,22 @@
 All notable changes to ESF. The protocol version (`v=1` in a stamp) is independent of these release numbers; a change
 that would stop existing stamps from verifying moves the protocol version, not just this file.
 
+## v0.6.1 (Thunderbird client)
+
+### Changed
+
+- **The suggestion to the sender is rewritten.** It was too long, too technical and — worse — hard-wrapped in the
+  template, which gave the draft the ragged, broken-mid-sentence look of a machine-generated message. Paragraphs are
+  now single unbroken lines that the mail client wraps to the reader's window.
+- The text no longer contains a single piece of jargon (a test enforces the list: hash, nonce, bits, algorithm,
+  header, "proof of work", protocol). Instead it makes the comparison the idea actually came from: a letterbox gets a
+  couple of adverts a week and an inbox gets hundreds, because someone had to buy a stamp for the paper ones. ESF
+  puts the stamp back — not money, a couple of seconds of computer time. One message goes unnoticed; a million cost
+  more than a month of a computer running flat out, and the advertiser has to pay for that.
+- Down from roughly 900 to 660 characters, and it no longer calls ESF a "small add-on".
+- A failed stamp now quotes what the verifier actually objected to, because a sender can only act on a report that
+  says what went wrong.
+
 ## v0.6.0 (Thunderbird client)
 
 ### Added

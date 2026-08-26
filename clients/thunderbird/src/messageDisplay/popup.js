@@ -142,7 +142,8 @@ document.getElementById("suggest").addEventListener("click", async () => {
   const response = await browser.runtime.sendMessage({
     type: "esf:suggestEsf",
     tabId: (await browser.tabs.query({ active: true, currentWindow: true }))[0]?.id,
-    state: current && current.state
+    state: current && current.state,
+    reason: current && current.reason
   });
   if (response && response.ok) {
     window.close();

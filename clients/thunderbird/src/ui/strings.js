@@ -41,44 +41,62 @@ export const HEADLINES = {
 /**
  * The suggestion offered to a sender whose message carried no accepted stamp.
  *
- * Written to be sendable without editing and to survive being read by a stranger: it opens by saying the mail
- * arrived fine, accuses nobody of anything, explains the mechanism in one sentence, and asks for nothing. A template
- * that read as a complaint would cost the project more goodwill than an installation gains it.
+ * Rules this text follows, in order of importance:
+ *
+ *  - **No jargon.** Not one word: no hash, nonce, bits, algorithm, header or "proof of work". The reader is a person
+ *    who received an email, not someone who wants a protocol lesson. A test enforces this.
+ *  - **A comparison they already have.** Postage is not a metaphor invented for the occasion - it is where the idea
+ *    came from, and everyone has felt the difference between their letterbox and their inbox.
+ *  - **Short.** Anything longer reads as a lecture and gets deleted.
+ *  - **No demand, no accusation.** It opens by saying the message arrived fine and closes by asking for nothing.
+ *
+ * Formatting matters as much as wording. Each paragraph is **one unbroken line**, because a mail client wraps plain
+ * text to the reader's window; pre-wrapping it in the template produces the ragged, broken-mid-sentence look of a
+ * machine-generated message - which is the opposite of the impression this text exists to make.
  *
  * It is always opened as a *draft*. The add-on never sends anything by itself.
  */
+
+const MISSING_PARAGRAPHS = url => [
+  "Hi,",
+
+  "your message arrived fine - nothing wrong with it.",
+
+  "Something I keep wondering about: my letterbox gets a couple of adverts a week, my inbox gets hundreds. " +
+  "The difference is that someone had to buy a stamp for the paper ones. Email costs the sender nothing, so " +
+  "nothing stops anyone sending a million.",
+
+  "ESF puts the stamp back. Not money - a couple of seconds of computer time per message. Sending this one to " +
+  "you: I didn't notice it. Sending a million: more than a month of a computer running flat out, and the " +
+  "advertiser has to pay for that.",
+
+  "It's free and open source, if you'd like your mail to carry one too:",
+
+  url,
+
+  "No need to reply."
+];
+
+const INVALID_PARAGRAPHS = (url, reason) => [
+  "Hi,",
+
+  `your message came with an ESF stamp, but it didn't check out on my side${reason ? ` - my client said: ${reason}` : ""}.`,
+
+  "Your message itself arrived fine. Since we're both running this, it seemed worth telling you; usually it " +
+  "turns out to be a difference in setup or versions.",
+
+  url
+];
+
 export const SUGGESTION = {
   missing: {
-    subject: "A small suggestion about email and spam",
-    body: url => [
-      "Hi,",
-      "",
-      "your message arrived fine - this is not a complaint about anything.",
-      "",
-      "I use a small open-source add-on called ESF (End Spam Forever). Before sending, it has my computer spend",
-      "about a second of real computing work for each recipient and attaches the result to the message. Checking",
-      "that work costs the receiving side almost nothing, which is the whole idea: normal email stays normal, while",
-      "sending a million messages becomes expensive.",
-      "",
-      "If that sounds useful, it is free, local and open source. Nothing is sent to any service, and it works",
-      "alongside SPF, DKIM and DMARC rather than replacing them:",
-      `  ${url}`,
-      "",
-      "No need to reply about this."
-    ].join("\n")
+    subject: "Why my inbox gets more junk than my letterbox",
+    /** @param {string} url @returns {string} plain text body, one line per paragraph */
+    body: url => MISSING_PARAGRAPHS(url).join("\n\n")
   },
   invalid: {
-    subject: "Your ESF stamp did not verify here",
-    body: url => [
-      "Hi,",
-      "",
-      "your message carried an ESF proof of work, but it did not verify on my side. Since we are both running this,",
-      "it seemed worth telling you - it usually means an implementation or configuration difference rather than",
-      "anything wrong with the message itself, which arrived fine.",
-      "",
-      "The project would probably like to know about this as well:",
-      `  ${url}`,
-      ""
-    ].join("\n")
+    subject: "Your ESF stamp didn't check out here",
+    /** @param {string} url @param {string} [reason] the verifier's own words for what failed */
+    body: (url, reason) => INVALID_PARAGRAPHS(url, reason).join("\n\n")
   }
 };

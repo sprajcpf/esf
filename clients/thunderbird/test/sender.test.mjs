@@ -53,18 +53,51 @@ test("missing input is handled without pretending to know anything", () => {
 
 test("the suggestion reads as an offer, not a complaint", () => {
   const body = SUGGESTION.missing.body(PROJECT_URL);
-  assert.match(body, /not a complaint/);
   assert.match(body, /arrived fine/);
-  assert.ok(body.includes(PROJECT_URL));
   assert.match(body, /No need to reply/);
-  for (const word of ["must", "should install", "required", "blocked", "rejected"]) {
-    assert.ok(!body.toLowerCase().includes(word), `the suggestion must not demand: "${word}"`);
+  assert.ok(body.includes(PROJECT_URL));
+  for (const word of ["must", "should install", "required", "blocked", "rejected", "complaint"]) {
+    assert.ok(!body.toLowerCase().includes(word), `the suggestion must not demand or defend: "${word}"`);
   }
 });
 
-test("a failed stamp gets a different message than a missing one", () => {
-  const invalid = SUGGESTION.invalid.body(PROJECT_URL);
-  assert.match(invalid, /did not verify/);
+test("the suggestion contains no jargon at all", () => {
+  const body = `${SUGGESTION.missing.body(PROJECT_URL)} ${SUGGESTION.missing.subject}`.toLowerCase();
+  for (const word of ["hash", "nonce", "bits", "algorithm", "sha", "header", "proof of work", "cryptograph",
+    "protocol", "verif", "add-on", "plugin"]) {
+    assert.ok(!body.includes(word), `a person who just received an email should not have to read "${word}"`);
+  }
+});
+
+test("the suggestion tells a story with a comparison the reader already has", () => {
+  const body = SUGGESTION.missing.body(PROJECT_URL);
+  assert.match(body, /letterbox/, "the postage comparison is the whole explanation");
+  assert.match(body, /stamp/);
+  assert.match(body, /million/, "the asymmetry is the point: one is free, a million is not");
+});
+
+test("the suggestion stays short", () => {
+  const body = SUGGESTION.missing.body(PROJECT_URL);
+  assert.ok(body.length < 800, `${body.length} characters is a lecture, not a note`);
+  assert.ok(body.split("\n\n").length <= 8);
+});
+
+test("paragraphs are not pre-wrapped, so the mail client can wrap them", () => {
+  // Hard-wrapping in the template produces the ragged, broken-mid-sentence look of machine-generated mail.
+  for (const variant of [SUGGESTION.missing.body(PROJECT_URL), SUGGESTION.invalid.body(PROJECT_URL, "stale")]) {
+    for (const paragraph of variant.split("\n\n")) {
+      assert.ok(!paragraph.includes("\n"), `a paragraph must be one line: ${paragraph.slice(0, 40)}...`);
+    }
+  }
+});
+
+test("a failed stamp gets a different message, and quotes what failed", () => {
+  const invalid = SUGGESTION.invalid.body(PROJECT_URL, "insufficient work");
+  assert.match(invalid, /didn't check out/);
+  assert.match(invalid, /insufficient work/, "the sender can only act on this if it says what failed");
+  assert.match(invalid, /arrived fine/);
   assert.notEqual(invalid, SUGGESTION.missing.body(PROJECT_URL));
   assert.notEqual(SUGGESTION.invalid.subject, SUGGESTION.missing.subject);
+  // Without a reason it must still read cleanly.
+  assert.ok(!SUGGESTION.invalid.body(PROJECT_URL).includes("undefined"));
 });

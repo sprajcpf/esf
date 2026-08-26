@@ -239,7 +239,7 @@ browser.runtime.onMessage.addListener((message, _sender) => {
       return getVerificationForTab(message.tabId, message.force === true);
 
     case "esf:suggestEsf":
-      return suggestEsfToSender(message.tabId, message.state);
+      return suggestEsfToSender(message.tabId, message.state, message.reason);
 
     default:
       return undefined;
@@ -269,17 +269,19 @@ async function getVerificationForTab(tabId, force) {
  * unstamped mail would be a nuisance generator: today almost every message is unstamped. So this prepares a message
  * the user reads, edits and sends themselves, and it is only offered where there is plausibly a person to reach.
  */
-async function suggestEsfToSender(tabId, state) {
+async function suggestEsfToSender(tabId, state, reason) {
   const displayed = await browser.messageDisplay.getDisplayedMessages(tabId);
   const message = (displayed.messages || [])[0];
   if (!message) {
     return { ok: false, reason: "no-message" };
   }
-  const template = state === StampState.INVALID ? SUGGESTION.invalid : SUGGESTION.missing;
+  const invalid = state === StampState.INVALID;
+  const template = invalid ? SUGGESTION.invalid : SUGGESTION.missing;
   try {
     await browser.compose.beginReply(message.id, "replyToSender", {
       isPlainText: true,
-      plainTextBody: template.body(PROJECT_URL)
+      // Subject stays the reply subject Thunderbird generated: changing it on a reply breaks the thread.
+      plainTextBody: template.body(PROJECT_URL, invalid ? reason : undefined)
     });
     return { ok: true };
   } catch (error) {
